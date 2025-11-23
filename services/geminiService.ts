@@ -1,16 +1,47 @@
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { GenerationRequest, StudyNoteData, QuizData, HomeworkData, Language, Difficulty, DetailLevel, UserProfile, HistoryItem, QuizResult, AnalysisResult } from '../types';
 
-// Ensure API key is available
-const apiKey = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
+// Helper to get API Key safely in different environments
+const getApiKey = (): string => {
+  // 1. Try Vite specific import.meta.env (Standard for Vite apps)
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
+      // @ts-ignore
+      return import.meta.env.VITE_API_KEY;
+    }
+  } catch (e) {}
+
+  // 2. Try process.env (Standard for CRA/Next.js or if defined in config)
+  try {
+    // @ts-ignore
+    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+      // @ts-ignore
+      return process.env.API_KEY;
+    }
+  } catch (e) {}
+
+  return '';
+};
+
+const apiKey = getApiKey();
+// Safely initialize: Only create instance if key exists to prevent crash on load
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 // Helper to determine model based on complexity
 const getModelName = (req: GenerationRequest): string => {
   return 'gemini-2.5-flash';
 };
 
+const validateAi = () => {
+  if (!apiKey || !ai) {
+    throw new Error("API Key is missing. Please add VITE_API_KEY to your Vercel Environment Variables.");
+  }
+};
+
 export const generateStudyNotes = async (req: GenerationRequest): Promise<StudyNoteData> => {
+  validateAi();
   const model = getModelName(req);
 
   const prompt = `
@@ -41,7 +72,7 @@ export const generateStudyNotes = async (req: GenerationRequest): Promise<StudyN
     For the Mermaid diagram, create a mind map or flowchart summarizing the topic.
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await ai!.models.generateContent({
     model: model,
     contents: prompt
   });
@@ -81,6 +112,7 @@ export const generateStudyNotes = async (req: GenerationRequest): Promise<StudyN
 };
 
 export const generateQuiz = async (req: GenerationRequest): Promise<QuizData> => {
+  validateAi();
   const model = 'gemini-2.5-flash'; 
 
   const quizSchema: Schema = {
@@ -122,7 +154,7 @@ export const generateQuiz = async (req: GenerationRequest): Promise<QuizData> =>
     3. Ensure questions are challenging but appropriate for the grade level.
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await ai!.models.generateContent({
     model: model,
     contents: prompt,
     config: {
@@ -152,6 +184,7 @@ export const generateQuiz = async (req: GenerationRequest): Promise<QuizData> =>
 };
 
 export const checkHomework = async (req: GenerationRequest): Promise<HomeworkData> => {
+  validateAi();
   // Use flash for multimodal capabilities (vision)
   const model = 'gemini-2.5-flash';
 
@@ -182,7 +215,7 @@ export const checkHomework = async (req: GenerationRequest): Promise<HomeworkDat
   // Helper to strip data URL prefix if present
   const base64Data = req.homeworkImage?.replace(/^data:image\/\w+;base64,/, '') || '';
   
-  const response = await ai.models.generateContent({
+  const response = await ai!.models.generateContent({
     model: model,
     contents: {
       parts: [
@@ -211,6 +244,7 @@ export const checkHomework = async (req: GenerationRequest): Promise<HomeworkDat
 };
 
 export const analyzeWeakness = async (topic: string, mistakes: {question: string, userAnswer: string, correct: string}[], language: Language): Promise<string> => {
+  if (!apiKey || !ai) return "API Key missing.";
   const prompt = `
     The student took a quiz on "${topic}" and made the following mistakes:
     ${JSON.stringify(mistakes)}
@@ -236,6 +270,7 @@ export const generateProgressReport = async (
   history: HistoryItem[], 
   results: QuizResult[]
 ): Promise<AnalysisResult> => {
+  validateAi();
   
   const recentQuizzes = results.slice(0, 15).map(r => ({
     topic: r.topic,
@@ -299,7 +334,7 @@ export const generateProgressReport = async (
     required: ['overallStatus', 'summary', 'strengths', 'weaknesses', 'recommendations', 'masteryLevel']
   };
 
-  const response = await ai.models.generateContent({
+  const response = await ai!.models.generateContent({
     model: 'gemini-2.5-flash',
     contents: prompt,
     config: {

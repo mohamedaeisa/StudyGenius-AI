@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import AuthScreen from './components/AuthScreen';
@@ -108,9 +107,16 @@ const App: React.FC = () => {
         }, currentUser.id);
         setCurrentView(AppView.HOMEWORK);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Generation failed", error);
-      alert("Something went wrong with the AI generation. Please try again.");
+      let msg = "Something went wrong with the AI generation.";
+      if (error.message) {
+        msg += `\n\nError details: ${error.message}`;
+        if (error.message.includes('API Key') || error.message.includes('401') || error.message.includes('403')) {
+          msg += "\n\nPlease check your API Key configuration in the deployment settings.";
+        }
+      }
+      alert(msg);
     } finally {
       setIsLoading(false);
     }
@@ -130,16 +136,24 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
-    if (currentView === AppView.AUTH) {
-      return <AuthScreen onLogin={handleLogin} onGuestLogin={handleGuestLogin} appLanguage={appLanguage} />;
-    }
-
-    if (!currentUser) return null; // Should ideally redirect to AUTH
-
     switch (currentView) {
+      case AppView.AUTH:
+        return (
+          <AuthScreen 
+            onLogin={handleLogin} 
+            onGuestLogin={handleGuestLogin}
+            appLanguage={appLanguage} 
+          />
+        );
       case AppView.HOME:
-        return <ConfigForm onSubmit={handleGeneration} isLoading={isLoading} appLanguage={appLanguage} user={currentUser} />;
-      
+        return currentUser ? (
+          <ConfigForm 
+            onSubmit={handleGeneration} 
+            isLoading={isLoading} 
+            appLanguage={appLanguage}
+            user={currentUser}
+          />
+        ) : null;
       case AppView.NOTES:
         return noteData ? (
           <NoteDisplay 
@@ -148,18 +162,16 @@ const App: React.FC = () => {
             appLanguage={appLanguage}
           />
         ) : null;
-      
       case AppView.QUIZ:
-        return quizData ? (
+        return quizData && currentUser ? (
           <QuizDisplay 
             data={quizData} 
-            language={currentLanguage}
             onBack={() => setCurrentView(AppView.HOME)} 
+            language={currentLanguage}
             appLanguage={appLanguage}
             userId={currentUser.id}
           />
         ) : null;
-      
       case AppView.HOMEWORK:
         return homeworkData ? (
           <HomeworkDisplay 
@@ -168,12 +180,16 @@ const App: React.FC = () => {
             appLanguage={appLanguage}
           />
         ) : null;
-
       case AppView.DASHBOARD:
-        return <Dashboard onLoadItem={handleLoadHistory} appLanguage={appLanguage} user={currentUser} />;
-      
+        return currentUser ? (
+          <Dashboard 
+            onLoadItem={handleLoadHistory} 
+            appLanguage={appLanguage}
+            user={currentUser}
+          />
+        ) : null;
       default:
-        return <div>View Not Found</div>;
+        return null;
     }
   };
 

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { HistoryItem, Language, UserProfile, AnalysisResult, QuizResult } from '../types';
 import { getHistory, getQuizResults, updateHistoryItem, getAnalysis, saveAnalysis } from '../services/storageService';
@@ -38,9 +39,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLoadItem, appLanguage, user }) 
       const newAnalysis = await generateProgressReport(user, history, getQuizResults(user.id));
       setAnalysis(newAnalysis);
       saveAnalysis(newAnalysis, user.id);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("Failed to generate analysis. Please try again.");
+      let errorMsg = e.message || "Failed to generate analysis.";
+      if (errorMsg.includes('API Key') || errorMsg.includes('missing')) {
+        errorMsg += "\n\nDEPLOYMENT TIP: Add 'VITE_API_KEY' to your Vercel Environment Variables.";
+      }
+      alert(errorMsg);
     } finally {
       setIsAnalyzing(false);
     }
