@@ -1,6 +1,5 @@
 
-
-import { EducationSystem } from './types';
+import { EducationSystem, Badge, UserProfile } from './types';
 
 export const YEARS = [
   'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6',
@@ -22,7 +21,58 @@ export const EDUCATION_SYSTEMS: EducationSystem[] = [
   EducationSystem.CAMBRIDGE
 ];
 
-// Fallback images if needed
+// --- Gamification Constants ---
+
+export const XP_REWARDS = {
+  GENERATE_NOTE: 20,
+  COMPLETE_QUIZ: 50,
+  PERFECT_SCORE: 30, // Bonus
+  REVIEW_SESSION: 40,
+  CHECK_HOMEWORK: 15,
+  DAILY_STREAK: 10,
+  LISTEN_PODCAST: 25
+};
+
+export const LEVEL_THRESHOLD = 200; // XP needed per level (simplified linear for now)
+
+export const BADGES: Badge[] = [
+  {
+    id: 'first_step',
+    icon: '🚀',
+    nameKey: 'badgeFirstStep',
+    descKey: 'badgeFirstStepDesc',
+    condition: (u, count) => count >= 1
+  },
+  {
+    id: 'streak_3',
+    icon: '🔥',
+    nameKey: 'badgeStreak3',
+    descKey: 'badgeStreak3Desc',
+    condition: (u, count) => u.gamification.streak >= 3
+  },
+  {
+    id: 'streak_7',
+    icon: '⚡',
+    nameKey: 'badgeStreak7',
+    descKey: 'badgeStreak7Desc',
+    condition: (u, count) => u.gamification.streak >= 7
+  },
+  {
+    id: 'scholar',
+    icon: '🎓',
+    nameKey: 'badgeScholar',
+    descKey: 'badgeScholarDesc',
+    condition: (u, count) => u.gamification.level >= 5
+  },
+  {
+    id: 'master',
+    icon: '👑',
+    nameKey: 'badgeMaster',
+    descKey: 'badgeMasterDesc',
+    condition: (u, count) => u.gamification.level >= 10
+  }
+];
+
 export const PLACEHOLDER_IMG = "https://picsum.photos/400/300";
 
 export const TRANSLATIONS = {
@@ -31,6 +81,7 @@ export const TRANSLATIONS = {
     developedBy: "Developed by Mohamed Eisa",
     menuCreate: "Create",
     menuDashboard: "Study Tracker",
+    menuGamification: "Achievements",
     welcomeTitle: "Create Your Study Material",
     welcomeSubtitle: "Configure the AI to generate notes, quizzes, or check your homework.",
     eduLevel: "Education Level",
@@ -44,6 +95,9 @@ export const TRANSLATIONS = {
     modeNotes: "Study Notes",
     modeQuiz: "Generate Quiz",
     modeHomework: "Homework Checker",
+    modeFlashcards: "Flashcards",
+    modeLazy: "YouTube / Lazy",
+    modePodcast: "AI Podcast",
     language: "Language",
     detailLevel: "Detail Level",
     difficulty: "Difficulty",
@@ -54,6 +108,9 @@ export const TRANSLATIONS = {
     btnGenerateGuide: "Generate Guide",
     btnGenerateQuiz: "Generate Quiz",
     btnCheckHomework: "Check Homework",
+    btnGenerateFlashcards: "Create Cards",
+    btnLazy: "Summarize Video",
+    btnPodcast: "Create Podcast",
     shareApp: "Share App",
     appLinkCopied: "App link copied!",
     
@@ -83,6 +140,9 @@ export const TRANSLATIONS = {
     doc: "DOC",
     quizShort: "QUIZ",
     chk: "CHK",
+    cardShort: "CARD",
+    lazyShort: "YT",
+    podShort: "POD",
     aiProgressReport: "AI Progress Tracker",
     generateAnalysis: "Generate Analysis",
     refreshAnalysis: "Update Analysis",
@@ -95,6 +155,64 @@ export const TRANSLATIONS = {
     analysisGenerated: "Analysis generated on",
     generating: "Analyzing...",
     
+    // Gamification
+    level: "Lvl",
+    xp: "XP",
+    streak: "Streak",
+    trophyRoom: "Trophy Room",
+    weeklyChallenge: "Weekly Challenge",
+    challengeTitle: "Quiz Master",
+    challengeDesc: "Complete 3 quizzes with >80% score this week.",
+    challengeReward: "Reward: 500 XP",
+    leaderboard: "Class Leaderboard",
+    badgeFirstStep: "First Step",
+    badgeFirstStepDesc: "Completed your first study activity.",
+    badgeStreak3: "On Fire",
+    badgeStreak3Desc: "Achieved a 3-day study streak.",
+    badgeStreak7: "Unstoppable",
+    badgeStreak7Desc: "Achieved a 7-day study streak.",
+    badgeScholar: "Scholar",
+    badgeScholarDesc: "Reached Level 5.",
+    badgeMaster: "Grandmaster",
+    badgeMasterDesc: "Reached Level 10.",
+    xpGained: "XP Gained!",
+    levelUp: "Level Up!",
+    
+    // Learning Path & Flashcards
+    adaptivePath: "Adaptive Learning Path",
+    generatePath: "Create AI Study Path",
+    pathIntro: "A personalized curriculum based on your weaknesses and goals.",
+    startTopic: "Start Topic",
+    locked: "Locked",
+    completed: "Completed",
+    dueFlashcards: "Review Due Cards",
+    noDueCards: "All caught up! No cards due.",
+    cardsReady: "Cards ready to review",
+    reviewNow: "Review Now",
+    flashcardReview: "Spaced Repetition Review",
+    revealAnswer: "Reveal Answer",
+    ratingAgain: "Again (< 1m)",
+    ratingHard: "Hard (2d)",
+    ratingGood: "Good (3d)",
+    ratingEasy: "Easy (4d)",
+    
+    // Lazy/YouTube & Podcast
+    youtubeUrl: "YouTube Video URL",
+    youtubePlaceholder: "https://www.youtube.com/watch?v=...",
+    transcriptLabel: "Or Paste Transcript (Optional - for better accuracy)",
+    transcriptPlaceholder: "Paste the video transcript here if the video is new or not famous...",
+    lazyIntro: "Paste a YouTube link. We'll extract the key lessons and make a quiz.",
+    podcastIntro: "Convert any topic into a short, engaging audio podcast. Perfect for commuting!",
+    podcastTopicPlaceholder: "e.g. The French Revolution, Quantum Mechanics...",
+    podcastLength: "Duration",
+    podcastVoice: "Voice",
+    short: "Short (~1 min)",
+    medium: "Medium (~2 mins)",
+    long: "Long (~4 mins)",
+    male: "Male",
+    female: "Female",
+    downloadAudio: "Download Audio",
+    
     // Common
     back: "Back",
     print: "Print",
@@ -102,7 +220,7 @@ export const TRANSLATIONS = {
     close: "Close",
     generatedWith: "Generated with Gemini AI",
 
-    // Quiz
+    // Quiz & Audio
     quit: "Quit",
     progress: "Progress",
     switchToFlash: "Switch to Flashcards",
@@ -128,13 +246,18 @@ export const TRANSLATIONS = {
     next: "Next",
     done: "Done",
     exit: "Exit",
-    card: "Card"
+    card: "Card",
+    play: "Play",
+    pause: "Pause",
+    playingPodcast: "Playing Podcast",
+    scriptView: "View Script"
   },
   Arabic: {
     appTitle: "StudyGenius AI",
     developedBy: "تم التطوير بواسطة محمد عيسى",
     menuCreate: "إنشاء",
     menuDashboard: "سجل الدراسة",
+    menuGamification: "الإنجازات",
     welcomeTitle: "أنشئ موادك الدراسية",
     welcomeSubtitle: "قم بإعداد الذكاء الاصطناعي لإنشاء ملاحظات، اختبارات، أو تصحيح واجبك.",
     eduLevel: "المستوى التعليمي",
@@ -148,6 +271,9 @@ export const TRANSLATIONS = {
     modeNotes: "ملاحظات دراسية",
     modeQuiz: "إنشاء اختبار",
     modeHomework: "مصحح الواجبات",
+    modeFlashcards: "بطاقات استذكار",
+    modeLazy: "يوتيوب / السريع",
+    modePodcast: "بودكاست ذكي",
     language: "اللغة",
     detailLevel: "مستوى التفصيل",
     difficulty: "الصعوبة",
@@ -158,6 +284,9 @@ export const TRANSLATIONS = {
     btnGenerateGuide: "إنشاء الدليل",
     btnGenerateQuiz: "إنشاء الاختبار",
     btnCheckHomework: "فحص الواجب",
+    btnGenerateFlashcards: "إنشاء البطاقات",
+    btnLazy: "تلخيص الفيديو",
+    btnPodcast: "إنشاء بودكاست",
     shareApp: "مشاركة التطبيق",
     appLinkCopied: "تم نسخ الرابط!",
 
@@ -187,6 +316,9 @@ export const TRANSLATIONS = {
     doc: "مستند",
     quizShort: "اختبار",
     chk: "واجب",
+    cardShort: "بطاقة",
+    lazyShort: "يوتيوب",
+    podShort: "صوت",
     aiProgressReport: "متتبع التقدم الذكي",
     generateAnalysis: "تحليل التقدم",
     refreshAnalysis: "تحديث التحليل",
@@ -198,6 +330,64 @@ export const TRANSLATIONS = {
     recommendedPlan: "الخطة المقترحة",
     analysisGenerated: "تم إنشاء التحليل في",
     generating: "جاري التحليل...",
+
+    // Gamification
+    level: "مستوى",
+    xp: "نقاط",
+    streak: "حماس",
+    trophyRoom: "غرفة الجوائز",
+    weeklyChallenge: "التحدي الأسبوعي",
+    challengeTitle: "سيد الاختبارات",
+    challengeDesc: "أكمل 3 اختبارات بنتيجة أعلى من 80% هذا الأسبوع.",
+    challengeReward: "الجائزة: 500 نقطة",
+    leaderboard: "لوحة المتصدرين",
+    badgeFirstStep: "الخطوة الأولى",
+    badgeFirstStepDesc: "أكملت نشاطك الدراسي الأول.",
+    badgeStreak3: "مشتعل",
+    badgeStreak3Desc: "حققت سلسلة دراسة لمدة 3 أيام.",
+    badgeStreak7: "لا يمكن إيقافك",
+    badgeStreak7Desc: "حققت سلسلة دراسة لمدة 7 أيام.",
+    badgeScholar: "باحث",
+    badgeScholarDesc: "وصلت للمستوى 5.",
+    badgeMaster: "خبير",
+    badgeMasterDesc: "وصلت للمستوى 10.",
+    xpGained: "اكتسبت نقاط!",
+    levelUp: "مستوى جديد!",
+
+    // Learning Path & Flashcards
+    adaptivePath: "مسار التعلم الذكي",
+    generatePath: "إنشاء مسار ذكي",
+    pathIntro: "منهج مخصص بناءً على نقاط ضعفك وأهدافك.",
+    startTopic: "ابدأ الموضوع",
+    locked: "مغلق",
+    completed: "مكتمل",
+    dueFlashcards: "مراجعة البطاقات المستحقة",
+    noDueCards: "لا توجد بطاقات مستحقة الآن.",
+    cardsReady: "بطاقة جاهزة للمراجعة",
+    reviewNow: "ابدأ المراجعة",
+    flashcardReview: "مراجعة التكرار المتباعد",
+    revealAnswer: "كشف الإجابة",
+    ratingAgain: "أعد (< دقيقة)",
+    ratingHard: "صعب (يومان)",
+    ratingGood: "جيد (3 أيام)",
+    ratingEasy: "سهل (4 أيام)",
+
+    // Lazy/YouTube & Podcast
+    youtubeUrl: "رابط فيديو يوتيوب",
+    youtubePlaceholder: "https://www.youtube.com/watch?v=...",
+    transcriptLabel: "أو الصق النص (اختياري - لدقة أفضل)",
+    transcriptPlaceholder: "الصق نص الفيديو هنا إذا كان الفيديو جديداً أو غير مشهور...",
+    lazyIntro: "ضع رابط يوتيوب. سنستخرج أهم الدروس وننشئ اختباراً.",
+    podcastIntro: "حول أي موضوع إلى بودكاست صوتي قصير. مثالي للمواصلات!",
+    podcastTopicPlaceholder: "مثال: الثورة الفرنسية، ميكانيكا الكم...",
+    podcastLength: "المدة",
+    podcastVoice: "الصوت",
+    short: "قصير (دقيقة)",
+    medium: "متوسط (دقيقتين)",
+    long: "طويل (4 دقائق)",
+    male: "رجل",
+    female: "امرأة",
+    downloadAudio: "تحميل الصوت",
     
     // Common
     back: "رجوع",
@@ -206,7 +396,7 @@ export const TRANSLATIONS = {
     close: "إغلاق",
     generatedWith: "تم الإنشاء بواسطة Gemini AI",
 
-    // Quiz
+    // Quiz & Audio
     quit: "خروج",
     progress: "التقدم",
     switchToFlash: "التبديل للبطاقات",
@@ -232,6 +422,10 @@ export const TRANSLATIONS = {
     next: "التالي",
     done: "تم",
     exit: "خروج",
-    card: "بطاقة"
+    card: "بطاقة",
+    play: "تشغيل",
+    pause: "إيقاف",
+    playingPodcast: "تشغيل البودكاست",
+    scriptView: "عرض النص"
   }
 };

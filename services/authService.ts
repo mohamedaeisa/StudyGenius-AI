@@ -20,15 +20,25 @@ const saveUser = (user: UserProfile) => {
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
 };
 
+const INITIAL_GAMIFICATION = {
+  xp: 0,
+  level: 1,
+  streak: 0,
+  lastStudyDate: 0,
+  earnedBadges: []
+};
+
 export const loginUser = (email: string, name: string, preferences: UserPreferences): UserProfile => {
   const users = getUsers();
   
   if (users[email]) {
-    // Existing user - update preferences if changed, or just return
+    // Existing user - ensure gamification exists (migration)
+    const existing = users[email];
     const updatedUser = {
-      ...users[email],
-      name: name, // Update name if changed
-      preferences: { ...users[email].preferences, ...preferences }
+      ...existing,
+      name: name,
+      preferences: { ...existing.preferences, ...preferences },
+      gamification: existing.gamification || INITIAL_GAMIFICATION
     };
     saveUser(updatedUser);
     localStorage.setItem(ACTIVE_USER_KEY, email);
@@ -40,7 +50,8 @@ export const loginUser = (email: string, name: string, preferences: UserPreferen
       email,
       name,
       preferences,
-      joinedAt: Date.now()
+      joinedAt: Date.now(),
+      gamification: INITIAL_GAMIFICATION
     };
     saveUser(newUser);
     localStorage.setItem(ACTIVE_USER_KEY, email);
@@ -58,7 +69,8 @@ export const loginGuest = (): UserProfile => {
       defaultCurriculum: EducationSystem.STANDARD,
       defaultLanguage: Language.ENGLISH
     },
-    joinedAt: Date.now()
+    joinedAt: Date.now(),
+    gamification: INITIAL_GAMIFICATION
   };
   
   saveUser(guestUser);
@@ -71,7 +83,15 @@ export const getActiveUser = (): UserProfile | null => {
   if (!email) return null;
   
   const users = getUsers();
-  return users[email] || null;
+  let user = users[email] || null;
+  
+  // Patch logic for old users without gamification
+  if (user && !user.gamification) {
+    user = { ...user, gamification: INITIAL_GAMIFICATION };
+    saveUser(user);
+  }
+  
+  return user;
 };
 
 export const logoutUser = () => {

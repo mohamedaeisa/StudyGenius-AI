@@ -8,11 +8,13 @@ import Card from './ui/Card';
 interface ConfigFormProps {
   onSubmit: (data: GenerationRequest) => void;
   isLoading: boolean;
+  loadingStatus?: string; // Prop to receive specific status messages
   appLanguage: Language;
   user: UserProfile;
+  prefill?: Partial<GenerationRequest>;
 }
 
-const ConfigForm: React.FC<ConfigFormProps> = ({ onSubmit, isLoading, appLanguage, user }) => {
+const ConfigForm: React.FC<ConfigFormProps> = ({ onSubmit, isLoading, loadingStatus, appLanguage, user, prefill }) => {
   const t = TRANSLATIONS[appLanguage];
 
   const [formData, setFormData] = useState<GenerationRequest>({
@@ -27,12 +29,23 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onSubmit, isLoading, appLanguag
     quizType: QuizType.MCQ,
     questionCount: 10,
     homeworkImage: undefined,
-    homeworkMimeType: undefined
+    homeworkMimeType: undefined,
+    youtubeUrl: '',
+    transcriptText: '',
+    podcastLength: 'Short',
+    podcastVoice: 'Female'
   });
 
   useEffect(() => {
     setFormData(prev => ({ ...prev, language: appLanguage }));
   }, [appLanguage]);
+
+  // Apply prefill if provided (e.g. from Learning Path)
+  useEffect(() => {
+    if (prefill) {
+      setFormData(prev => ({ ...prev, ...prefill }));
+    }
+  }, [prefill]);
 
   const [customSubject, setCustomSubject] = useState('');
   const [isCustomSubject, setIsCustomSubject] = useState(false);
@@ -44,6 +57,11 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onSubmit, isLoading, appLanguag
       alert("Please upload an image for homework checking.");
       return;
     }
+    if (formData.mode === 'lazy' && !formData.youtubeUrl && !formData.transcriptText) {
+      alert("Please enter a YouTube URL or paste the transcript.");
+      return;
+    }
+
     onSubmit({
       ...formData,
       subject: isCustomSubject ? customSubject : formData.subject
@@ -76,6 +94,43 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onSubmit, isLoading, appLanguag
       homeworkMimeType: undefined
     }));
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const getButtonLabel = () => {
+    if (isLoading) {
+      if (loadingStatus) return loadingStatus;
+      return "Generating...";
+    }
+    switch (formData.mode) {
+      case 'notes': return t.btnGenerateGuide;
+      case 'quiz': return t.btnGenerateQuiz;
+      case 'homework': return t.btnCheckHomework;
+      case 'flashcards': return t.btnGenerateFlashcards;
+      case 'lazy': return t.btnLazy;
+      case 'podcast': return t.btnPodcast;
+      default: return t.btnGenerateGuide;
+    }
+  };
+
+  const getModeLabel = (m: string) => {
+    switch(m) {
+      case 'notes': return t.modeNotes;
+      case 'quiz': return t.modeQuiz;
+      case 'homework': return t.modeHomework;
+      case 'flashcards': return t.modeFlashcards;
+      case 'lazy': return t.modeLazy;
+      case 'podcast': return t.modePodcast;
+      default: return m;
+    }
+  };
+
+  // Calculate simplified progress percentage based on status string
+  const getProgressPercent = () => {
+    if (!loadingStatus) return 0;
+    if (loadingStatus.includes("Script")) return 30;
+    if (loadingStatus.includes("Synthesizing")) return 70;
+    if (loadingStatus.includes("Audio")) return 90;
+    return 10;
   };
 
   return (
@@ -147,58 +202,51 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onSubmit, isLoading, appLanguag
               )}
             </div>
             
-            <div className="animate-fade-in">
-              <label className="block text-sm font-medium mb-1">
-                {t.topic} {formData.mode === 'homework' && <span className="text-slate-400 font-normal">{t.topicOptional}</span>}
-              </label>
-              <input 
-                type="text" 
-                className="w-full p-2 rounded-lg border dark:bg-slate-700 dark:border-slate-600 focus:ring-2 focus:ring-brand-500 outline-none"
-                value={formData.topic}
-                onChange={e => handleChange('topic', e.target.value)}
-                placeholder={t.topicPlaceholder}
-                required={formData.mode !== 'homework'}
-              />
-            </div>
+            {formData.mode !== 'lazy' && (
+              <div className="animate-fade-in">
+                <label className="block text-sm font-medium mb-1">
+                  {t.topic} {formData.mode === 'homework' && <span className="text-slate-400 font-normal">{t.topicOptional}</span>}
+                </label>
+                <input 
+                  type="text" 
+                  className="w-full p-2 rounded-lg border dark:bg-slate-700 dark:border-slate-600 focus:ring-2 focus:ring-brand-500 outline-none"
+                  value={formData.topic}
+                  onChange={e => handleChange('topic', e.target.value)}
+                  placeholder={formData.mode === 'podcast' ? t.podcastTopicPlaceholder : t.topicPlaceholder}
+                  required={formData.mode !== 'homework'}
+                />
+              </div>
+            )}
           </div>
 
           {/* Right Column: Mode Specifics */}
           <div className="space-y-4 bg-slate-50 dark:bg-slate-700/30 p-4 rounded-lg">
             {/* Mode Selection Cards */}
-            <div className="flex flex-wrap gap-3">
-              <button 
-                type="button"
-                className={`flex-1 min-w-[120px] whitespace-nowrap py-3 px-4 rounded-xl text-sm font-bold transition-all border-2 ${
-                  formData.mode === 'notes' 
-                    ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-300 shadow-sm' 
-                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-brand-300 dark:hover:border-brand-700 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                }`}
-                onClick={() => handleChange('mode', 'notes')}
-              >
-                {t.modeNotes}
-              </button>
-              <button 
-                type="button"
-                className={`flex-1 min-w-[120px] whitespace-nowrap py-3 px-4 rounded-xl text-sm font-bold transition-all border-2 ${
-                  formData.mode === 'quiz' 
-                    ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-300 shadow-sm' 
-                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-brand-300 dark:hover:border-brand-700 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                }`}
-                onClick={() => handleChange('mode', 'quiz')}
-              >
-                {t.modeQuiz}
-              </button>
-              <button 
-                type="button"
-                className={`flex-1 min-w-[120px] whitespace-nowrap py-3 px-4 rounded-xl text-sm font-bold transition-all border-2 ${
-                  formData.mode === 'homework' 
-                    ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-300 shadow-sm' 
-                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-brand-300 dark:hover:border-brand-700 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                }`}
-                onClick={() => handleChange('mode', 'homework')}
-              >
-                {t.modeHomework}
-              </button>
+            <div className="grid grid-cols-2 gap-3">
+              {['notes', 'quiz', 'homework', 'flashcards', 'lazy', 'podcast'].map((m) => {
+                const isLazy = m === 'lazy';
+                const isPodcast = m === 'podcast';
+                return (
+                  <button 
+                    key={m}
+                    type="button"
+                    className={`py-3 px-2 rounded-xl text-xs sm:text-sm font-bold transition-all border-2 ${
+                      formData.mode === m 
+                        ? isLazy 
+                          ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 shadow-sm'
+                          : isPodcast
+                            ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-300 shadow-sm'
+                            : 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-300 shadow-sm' 
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-brand-300 dark:hover:border-brand-700'
+                    } ${isLazy && formData.mode !== m ? 'hover:border-red-300 dark:hover:border-red-700' : ''} ${isPodcast && formData.mode !== m ? 'hover:border-purple-300 dark:hover:border-purple-700' : ''}`}
+                    onClick={() => handleChange('mode', m)}
+                  >
+                    {isLazy && <span className="mr-1">📺</span>}
+                    {isPodcast && <span className="mr-1">🎙️</span>}
+                    {getModeLabel(m)}
+                  </button>
+                );
+              })}
             </div>
 
             <div>
@@ -309,6 +357,82 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onSubmit, isLoading, appLanguag
                 </div>
               </div>
             )}
+
+            {formData.mode === 'lazy' && (
+               <div className="animate-fade-in space-y-4">
+                 <p className="text-xs text-slate-500 italic">{t.lazyIntro}</p>
+                 <div>
+                   <label className="block text-sm font-medium mb-1 text-red-600 dark:text-red-400">
+                     {t.youtubeUrl}
+                   </label>
+                   <input 
+                    type="text"
+                    className="w-full p-2 rounded-lg border border-red-200 dark:bg-slate-700 dark:border-slate-600 focus:ring-2 focus:ring-red-500 outline-none"
+                    value={formData.youtubeUrl}
+                    onChange={e => handleChange('youtubeUrl', e.target.value)}
+                    placeholder={t.youtubePlaceholder}
+                   />
+                 </div>
+                 <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-slate-200 dark:border-slate-600"></div>
+                    </div>
+                    <div className="relative flex justify-center text-xs">
+                      <span className="px-2 bg-slate-50 dark:bg-slate-800 text-slate-400">Optional</span>
+                    </div>
+                  </div>
+                 <div>
+                   <label className="block text-sm font-medium mb-1 text-slate-600 dark:text-slate-300">
+                     {t.transcriptLabel}
+                   </label>
+                   <textarea
+                    className="w-full p-2 rounded-lg border dark:bg-slate-700 dark:border-slate-600 focus:ring-2 focus:ring-brand-500 outline-none h-24 text-xs"
+                    value={formData.transcriptText}
+                    onChange={e => handleChange('transcriptText', e.target.value)}
+                    placeholder={t.transcriptPlaceholder}
+                   />
+                 </div>
+               </div>
+            )}
+
+            {formData.mode === 'podcast' && (
+               <div className="animate-fade-in p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-100 dark:border-purple-900/30 space-y-4">
+                 <div>
+                   <p className="text-sm text-purple-800 dark:text-purple-200 font-medium mb-2 flex items-center gap-2">
+                     <span className="text-xl">🎧</span> {t.modePodcast} - Commuter Mode
+                   </p>
+                   <p className="text-xs text-slate-600 dark:text-slate-400 mb-0">
+                     {t.podcastIntro}
+                   </p>
+                 </div>
+                 
+                 <div className="grid grid-cols-2 gap-4 pt-2">
+                    <div>
+                       <label className="block text-xs font-bold uppercase text-slate-500 mb-1">{t.podcastLength}</label>
+                       <select 
+                         className="w-full p-2 text-sm rounded-lg border dark:bg-slate-700 dark:border-slate-600 focus:ring-2 focus:ring-purple-500"
+                         value={formData.podcastLength}
+                         onChange={e => handleChange('podcastLength', e.target.value)}
+                       >
+                         <option value="Short">{t.short}</option>
+                         <option value="Medium">{t.medium}</option>
+                         <option value="Long">{t.long}</option>
+                       </select>
+                    </div>
+                    <div>
+                       <label className="block text-xs font-bold uppercase text-slate-500 mb-1">{t.podcastVoice}</label>
+                       <select 
+                         className="w-full p-2 text-sm rounded-lg border dark:bg-slate-700 dark:border-slate-600 focus:ring-2 focus:ring-purple-500"
+                         value={formData.podcastVoice}
+                         onChange={e => handleChange('podcastVoice', e.target.value)}
+                       >
+                         <option value="Female">{t.female}</option>
+                         <option value="Male">{t.male}</option>
+                       </select>
+                    </div>
+                 </div>
+               </div>
+            )}
           </div>
         </div>
 
@@ -316,10 +440,19 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onSubmit, isLoading, appLanguag
           <Button 
             type="submit" 
             isLoading={isLoading} 
-            className="w-full md:w-auto text-lg px-8"
+            className={`w-full md:w-auto text-lg px-8 relative overflow-hidden ${
+              formData.mode === 'lazy' ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500' : 
+              formData.mode === 'podcast' ? 'bg-purple-600 hover:bg-purple-700 focus:ring-purple-500' : ''
+            }`}
             disabled={formData.mode === 'homework' && !formData.homeworkImage}
           >
-            {formData.mode === 'notes' ? t.btnGenerateGuide : formData.mode === 'quiz' ? t.btnGenerateQuiz : t.btnCheckHomework}
+            <span className="relative z-10">{getButtonLabel()}</span>
+            {isLoading && loadingStatus && (
+              <div 
+                className="absolute bottom-0 left-0 h-1 bg-white/30 transition-all duration-500" 
+                style={{ width: `${getProgressPercent()}%` }}
+              ></div>
+            )}
           </Button>
         </div>
       </form>

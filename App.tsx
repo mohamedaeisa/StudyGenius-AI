@@ -7,6 +7,9 @@ import NoteDisplay from './components/NoteDisplay';
 import QuizDisplay from './components/QuizDisplay';
 import HomeworkDisplay from './components/HomeworkDisplay';
 import Dashboard from './components/Dashboard';
+import FlashcardReview from './components/FlashcardReview';
+import GamificationScreen from './components/GamificationScreen';
+import PodcastPlayer from './components/PodcastPlayer';
 import { Analytics } from '@vercel/analytics/react';
 import { 
   AppView, 
@@ -17,39 +20,66 @@ import {
   HistoryItem,
   Language,
   UserProfile,
-  UserPreferences
+  UserPreferences,
+  Flashcard,
+  FlashcardSet,
+  PodcastData
 } from './types';
-import { generateStudyNotes, generateQuiz, checkHomework } from './services/geminiService';
-import { saveToHistory, getStoredLanguage } from './services/storageService';
+import { generateStudyNotes, generateQuiz, checkHomework, generateFlashcards, generateLazyGuide, generatePodcast } from './services/geminiService';
+import { saveToHistory, getStoredLanguage, saveFlashcards } from './services/storageService';
 import { loginUser, getActiveUser, logoutUser, loginGuest } from './services/authService';
+import { awardXP, checkStreak, checkBadges } from './services/gamificationService';
+import { XP_REWARDS } from './constants';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [currentView, setCurrentView] = useState<AppView>(AppView.AUTH);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState<string>(''); // New state for granular progress
   const [appLanguage, setAppLanguage] = useState<Language>(getStoredLanguage());
   
   // Application Data States
   const [noteData, setNoteData] = useState<StudyNoteData | null>(null);
   const [quizData, setQuizData] = useState<QuizData | null>(null);
   const [homeworkData, setHomeworkData] = useState<HomeworkData | null>(null);
+  const [podcastData, setPodcastData] = useState<PodcastData | null>(null);
   const [currentLanguage, setCurrentLanguage] = useState<Language>(Language.ENGLISH);
+  
+  // Flashcards Review State
+  const [reviewCards, setReviewCards] = useState<Flashcard[]>([]);
 
-  // Initialize Auth
+  // Config Prefill (for Learning Path)
+  const [configPrefill, setConfigPrefill] = useState<Partial<GenerationRequest> | undefined>(undefined);
+
+  // Initialize Auth & Gamification Streak
   useEffect(() => {
     const activeUser = getActiveUser();
     if (activeUser) {
-      setCurrentUser(activeUser);
-      // Ensure we start at HOME if logged in, or stick to current if reloaded
+      // Check streaks on load
+      const streakUpdatedUser = checkStreak(activeUser);
+      setCurrentUser(streakUpdatedUser);
       setCurrentView(AppView.HOME);
     } else {
       setCurrentView(AppView.AUTH);
     }
   }, []);
 
+  const handleGamificationUpdate = (user: UserProfile, xpAmount: number) => {
+    const { user: xpUser, levelUp } = awardXP(user, xpAmount);
+    const { user: badgedUser, newBadges } = checkBadges(xpUser);
+    
+    setCurrentUser(badgedUser);
+    
+    // Simple alert for now, could be a toast later
+    if (levelUp) alert("🎉 Level Up! You are now Level " + badgedUser.gamification.level);
+    if (newBadges.length > 0) alert("🏅 New Badge Unlocked!");
+  };
+
   const handleLogin = (email: string, name: string, preferences: UserPreferences) => {
     const user = loginUser(email, name, preferences);
-    setCurrentUser(user);
+    // Initial check
+    const updated = checkStreak(user);
+    setCurrentUser(updated);
     setCurrentView(AppView.HOME);
   };
 
@@ -66,12 +96,14 @@ const App: React.FC = () => {
     setNoteData(null);
     setQuizData(null);
     setHomeworkData(null);
+    setPodcastData(null);
   };
 
   const handleGeneration = async (request: GenerationRequest) => {
     if (!currentUser) return;
     
     setIsLoading(true);
+    setLoadingStatus('Initializing...');
     setCurrentLanguage(request.language);
 
     try {
@@ -85,6 +117,8 @@ const App: React.FC = () => {
           timestamp: Date.now(),
           data: data
         }, currentUser.id);
+        
+        handleGamificationUpdate(currentUser, XP_REWARDS.GENERATE_NOTE);
         setCurrentView(AppView.NOTES);
       } else if (request.mode === 'quiz') {
         const data = await generateQuiz(request);
@@ -107,7 +141,49 @@ const App: React.FC = () => {
           timestamp: Date.now(),
           data: data
         }, currentUser.id);
+        
+        handleGamificationUpdate(currentUser, XP_REWARDS.CHECK_HOMEWORK);
         setCurrentView(AppView.HOMEWORK);
+      } else if (request.mode === 'flashcards') {
+        const data = await generateFlashcards(request);
+        saveFlashcards(data.cards, currentUser.id);
+        saveToHistory({
+          id: Date.now().toString(),
+          type: 'flashcards',
+          title: `Flashcards: ${data.topic}`,
+          timestamp: Date.now(),
+          data: data
+        }, currentUser.id);
+        
+        setReviewCards(data.cards);
+        setCurrentView(AppView.FLASHCARDS);
+      } else if (request.mode === 'lazy') {
+        const data = await generateLazyGuide(request);
+        setNoteData(data);
+        saveToHistory({
+          id: Date.now().toString(),
+          type: 'lazy',
+          title: `📺 ${data.title}`,
+          timestamp: Date.now(),
+          data: data
+        }, currentUser.id);
+        
+        handleGamificationUpdate(currentUser, XP_REWARDS.GENERATE_NOTE);
+        setCurrentView(AppView.NOTES);
+      } else if (request.mode === 'podcast') {
+        // Pass callback for progress updates
+        const data = await generatePodcast(request, (status) => setLoadingStatus(status));
+        setPodcastData(data);
+        saveToHistory({
+          id: Date.now().toString(),
+          type: 'podcast',
+          title: data.title,
+          timestamp: Date.now(),
+          data: data
+        }, currentUser.id);
+        
+        handleGamificationUpdate(currentUser, XP_REWARDS.LISTEN_PODCAST);
+        setCurrentView(AppView.PODCAST);
       }
     } catch (error: any) {
       console.error("Generation failed", error);
@@ -121,11 +197,29 @@ const App: React.FC = () => {
       alert(msg);
     } finally {
       setIsLoading(false);
+      setLoadingStatus('');
+      setConfigPrefill(undefined);
     }
   };
 
+  const handleQuizComplete = (score: number, total: number) => {
+    if (currentUser) {
+      let xp = XP_REWARDS.COMPLETE_QUIZ;
+      if (score === total) xp += XP_REWARDS.PERFECT_SCORE;
+      handleGamificationUpdate(currentUser, xp);
+    }
+    setCurrentView(AppView.HOME); // Or stay?
+  };
+
+  const handleFlashcardComplete = () => {
+    if (currentUser) {
+      handleGamificationUpdate(currentUser, XP_REWARDS.REVIEW_SESSION);
+    }
+    setCurrentView(AppView.DASHBOARD);
+  };
+
   const handleLoadHistory = (item: HistoryItem) => {
-    if (item.type === 'note') {
+    if (item.type === 'note' || item.type === 'lazy') {
       setNoteData(item.data as StudyNoteData);
       setCurrentView(AppView.NOTES);
     } else if (item.type === 'quiz') {
@@ -134,7 +228,24 @@ const App: React.FC = () => {
     } else if (item.type === 'homework') {
       setHomeworkData(item.data as HomeworkData);
       setCurrentView(AppView.HOMEWORK);
+    } else if (item.type === 'flashcards') {
+      const set = item.data as FlashcardSet;
+      setReviewCards(set.cards);
+      setCurrentView(AppView.FLASHCARDS);
+    } else if (item.type === 'podcast') {
+      setPodcastData(item.data as PodcastData);
+      setCurrentView(AppView.PODCAST);
     }
+  };
+
+  const handleStartReview = (cards: Flashcard[]) => {
+    setReviewCards(cards);
+    setCurrentView(AppView.FLASHCARDS);
+  };
+
+  const handleStartPathItem = (req: Partial<GenerationRequest>) => {
+    setConfigPrefill(req);
+    setCurrentView(AppView.HOME);
   };
 
   const renderContent = () => {
@@ -152,8 +263,10 @@ const App: React.FC = () => {
           <ConfigForm 
             onSubmit={handleGeneration} 
             isLoading={isLoading} 
+            loadingStatus={loadingStatus} // Pass the status
             appLanguage={appLanguage}
             user={currentUser}
+            prefill={configPrefill}
           />
         ) : null;
       case AppView.NOTES:
@@ -172,6 +285,7 @@ const App: React.FC = () => {
             language={currentLanguage}
             appLanguage={appLanguage}
             userId={currentUser.id}
+            onComplete={(score, total) => handleQuizComplete(score, total)} 
           />
         ) : null;
       case AppView.HOMEWORK:
@@ -182,12 +296,38 @@ const App: React.FC = () => {
             appLanguage={appLanguage}
           />
         ) : null;
+      case AppView.FLASHCARDS:
+        return currentUser ? (
+          <FlashcardReview 
+            cards={reviewCards} 
+            onComplete={handleFlashcardComplete} 
+            userId={currentUser.id}
+            appLanguage={appLanguage}
+          />
+        ) : null;
+      case AppView.PODCAST:
+        return podcastData ? (
+          <PodcastPlayer 
+            data={podcastData} 
+            onBack={() => setCurrentView(AppView.HOME)} 
+            appLanguage={appLanguage}
+          />
+        ) : null;
       case AppView.DASHBOARD:
         return currentUser ? (
           <Dashboard 
             onLoadItem={handleLoadHistory} 
             appLanguage={appLanguage}
             user={currentUser}
+            onReviewFlashcards={handleStartReview}
+            onStartPathItem={handleStartPathItem}
+          />
+        ) : null;
+      case AppView.GAMIFICATION:
+        return currentUser ? (
+          <GamificationScreen 
+            user={currentUser}
+            appLanguage={appLanguage}
           />
         ) : null;
       default:

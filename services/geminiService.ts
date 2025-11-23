@@ -1,6 +1,6 @@
 
-import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { GenerationRequest, StudyNoteData, QuizData, HomeworkData, Language, Difficulty, DetailLevel, UserProfile, HistoryItem, QuizResult, AnalysisResult } from '../types';
+import { GoogleGenAI, Type, Schema, Modality } from "@google/genai";
+import { GenerationRequest, StudyNoteData, QuizData, HomeworkData, Language, Difficulty, DetailLevel, UserProfile, HistoryItem, QuizResult, AnalysisResult, Flashcard, FlashcardSet, LearningPath, PodcastData } from '../types';
 
 // Helper to get API Key safely in different environments
 const getApiKey = (): string => {
@@ -57,12 +57,10 @@ export const generateStudyNotes = async (req: GenerationRequest): Promise<StudyN
     1. A JSON block at the VERY START identifying the "title" and a short "summary" (max 200 chars).
     2. A markdown section containing the notes.
     3. The markdown MUST include a Mermaid.js diagram definition inside a \`\`\`mermaid block.
-       - Start the block with "graph TD" on the first line.
-       - Do NOT use the "direction" keyword inside the graph definition.
-       - Ensure every connection or node definition is on a NEW LINE.
-       - CRITICAL RULE FOR MERMAID: You MUST wrap ALL node text content in double quotes.
-       - Correct: A["Node Label (Description)"] --> B["Another Label"]
-       - Incorrect: A[Node Label (Description)] --> B[Another Label]
+       - Start the block with "graph TD".
+       - CRITICAL RULE: Wrap ALL node text in double quotes.
+       - Correct: A["Node Label (with parens)"] --> B["Another Label"]
+       - Incorrect: A[Node Label (with parens)] --> B[Another Label]
     4. Use H1 (#) for Main Title.
     5. Use H2 (##) for sections.
     6. Use > for key definitions or "sticky notes".
@@ -371,6 +369,296 @@ export const generateProgressReport = async (
     weaknesses: data.weaknesses || [],
     recommendations: data.recommendations || [],
     masteryLevel: typeof data.masteryLevel === 'number' ? data.masteryLevel : 0,
+    timestamp: Date.now()
+  };
+};
+
+export const generateFlashcards = async (req: GenerationRequest): Promise<FlashcardSet> => {
+  validateAi();
+  
+  const prompt = `
+    Create 8 high-quality flashcards for:
+    Topic: ${req.topic}
+    Subject: ${req.subject}
+    Level: ${req.year}
+    Language: ${req.language}
+
+    Format as JSON array of objects with 'front' and 'back' properties.
+    Front: Question, concept, or term.
+    Back: Answer, definition, or explanation.
+    Keep content concise.
+  `;
+
+  const schema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+      topic: { type: Type.STRING },
+      cards: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            front: { type: Type.STRING },
+            back: { type: Type.STRING }
+          },
+          required: ['front', 'back']
+        }
+      }
+    },
+    required: ['topic', 'cards']
+  };
+
+  const response = await ai!.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: prompt,
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema: schema
+    }
+  });
+
+  let jsonText = response.text || '{}';
+  jsonText = jsonText.replace(/```json\s*|\s*```/g, '').trim();
+  const data = JSON.parse(jsonText);
+
+  // Transform to internal format with ID and SR fields
+  const cards: Flashcard[] = data.cards.map((c: any, index: number) => ({
+    id: `${Date.now()}_${index}`,
+    front: c.front,
+    back: c.back,
+    nextReview: Date.now(), // Due immediately
+    interval: 0,
+    easeFactor: 2.5,
+    repetitions: 0
+  }));
+
+  return {
+    topic: data.topic || req.topic,
+    cards
+  };
+};
+
+export const generateLearningPath = async (
+  user: UserProfile,
+  weaknesses: string[],
+  subject: string
+): Promise<LearningPath> => {
+  validateAi();
+
+  const prompt = `
+    Create an adaptive learning path for a student.
+    Profile: ${user.preferences.defaultYear}, ${user.preferences.defaultCurriculum}.
+    Subject: ${subject}
+    Identified Weaknesses: ${weaknesses.join(', ') || 'General improvement needed'}
+    Language: ${user.preferences.defaultLanguage}
+
+    Generate a sequence of 5 distinct learning milestones/steps.
+    If weaknesses exist, prioritize topics addressing them.
+    If no weaknesses, suggest a standard logical progression for the grade level.
+
+    For each item, choose the best type: 'note' (to learn), 'quiz' (to test), or 'flashcards' (to memorize).
+
+    Output JSON:
+    {
+      "subject": "${subject}",
+      "items": [
+        {
+          "topic": "Specific Topic Name",
+          "description": "Short reasoning why this is next.",
+          "type": "note" | "quiz" | "flashcards"
+        }
+      ]
+    }
+  `;
+
+  const schema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+      subject: { type: Type.STRING },
+      items: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            topic: { type: Type.STRING },
+            description: { type: Type.STRING },
+            type: { type: Type.STRING, enum: ['note', 'quiz', 'flashcards'] }
+          },
+          required: ['topic', 'description', 'type']
+        }
+      }
+    },
+    required: ['subject', 'items']
+  };
+
+  const response = await ai!.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: prompt,
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema: schema
+    }
+  });
+
+  let jsonText = response.text || '{}';
+  jsonText = jsonText.replace(/```json\s*|\s*```/g, '').trim();
+  const data = JSON.parse(jsonText);
+
+  return {
+    subject: data.subject,
+    items: data.items.map((item: any, idx: number) => ({
+      ...item,
+      id: `path_${Date.now()}_${idx}`,
+      status: idx === 0 ? 'available' : 'locked', // Unlock first item
+      reason: item.description
+    })),
+    generatedAt: Date.now()
+  };
+};
+
+export const generateLazyGuide = async (req: GenerationRequest): Promise<StudyNoteData> => {
+  validateAi();
+
+  // If user provided a URL, we try to use it. If they provided transcript, we use that.
+  const contentSource = req.transcriptText 
+    ? `TRANSCRIPT: ${req.transcriptText}` 
+    : `YOUTUBE URL: ${req.youtubeUrl}`;
+
+  const prompt = `
+    You are the "Lazy Student" helper. 
+    Analyze the following video content (either provided as a URL or transcript):
+    ${contentSource}
+
+    Goal: Create a comprehensive study guide + quick quiz so I don't have to watch the whole video.
+
+    Structure the response exactly as follows:
+    1. A JSON block at the VERY START identifying the "title" and a short "summary" (max 200 chars).
+    2. A markdown section containing:
+       - H1 Title
+       - ## 📺 Video Summary (Concise overview)
+       - ## 🔑 Key Concepts (Bulleted list of main takeaways)
+       - ## 🧠 Detailed Notes (Expand on difficult parts)
+       - ## 📝 Self-Check Quiz (5 Multiple Choice Questions with answers hidden in a details/summary block or at the very end).
+    3. The markdown MUST include a Mermaid.js diagram definition inside a \`\`\`mermaid block representing the video's logic or flow.
+       - Use "graph TD"
+       - Wrap node text in quotes.
+
+    Language: ${req.language}
+    Level: ${req.year}
+  `;
+
+  const response = await ai!.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: prompt,
+    config: {
+      // We rely on Gemini's training data or grounding if available to 'watch' the video URL.
+      // If it fails to access the URL, it will likely hallucinate or complain, 
+      // so the transcript fallback in UI is important.
+      tools: [{ googleSearch: {} }] // Enable search to help find video metadata/context
+    }
+  });
+
+  const text = response.text || '';
+  
+  // Parse output (Heuristic parsing)
+  const jsonMatch = text.match(/\{[\s\S]*?\}/);
+  let metadata = { title: "Video Summary", summary: 'Generated from YouTube' };
+  
+  if (jsonMatch) {
+    try {
+      metadata = JSON.parse(jsonMatch[0]);
+    } catch (e) {
+      console.warn("Could not parse metadata JSON");
+    }
+  }
+
+  const mermaidMatch = text.match(/```mermaid([\s\S]*?)```/);
+  const mermaidCode = mermaidMatch ? mermaidMatch[1].trim() : undefined;
+
+  let markdownContent = text;
+  if (jsonMatch) {
+    markdownContent = text.replace(jsonMatch[0], '').trim();
+  }
+
+  return {
+    title: metadata.title,
+    summary: metadata.summary,
+    markdownContent,
+    mermaidCode,
+    timestamp: Date.now()
+  };
+};
+
+export const generatePodcast = async (req: GenerationRequest, onProgress?: (msg: string) => void): Promise<PodcastData> => {
+  validateAi();
+
+  // Determine Constraints
+  let wordCount = 300; // Default/Short
+  if (req.podcastLength === 'Medium') wordCount = 600;
+  if (req.podcastLength === 'Long') wordCount = 1000;
+
+  let voiceName = 'Kore'; // Default Female
+  if (req.podcastVoice === 'Male') voiceName = 'Fenrir'; // Male sounding model
+
+  // Language & Dialect Logic
+  let languageInstruction = `Language: ${req.language}.`;
+  if (req.language === Language.ARABIC) {
+    languageInstruction += " CRITICAL: Write the script specifically in Egyptian Arabic Dialect (Ammiya/Masri) so it sounds natural and engaging for a podcast.";
+  }
+
+  // Step 1: Generate a Script
+  if (onProgress) onProgress("Writing Script...");
+  
+  const scriptPrompt = `
+    You are an expert educational podcast writer.
+    Write a short, engaging podcast script explaining: "${req.topic}".
+    Target Audience: ${req.year} students.
+    ${languageInstruction}
+    
+    Rules:
+    - Target Word Count: Approximately ${wordCount} words.
+    - Make it conversational, energetic, and clear.
+    - Start with a hook.
+    - End with a takeaway.
+    - Do NOT include sound effects descriptions like [intro music] or [applause], just the spoken text.
+  `;
+
+  const scriptResponse = await ai!.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: scriptPrompt
+  });
+
+  const scriptText = scriptResponse.text || "Podcast generation failed.";
+
+  // Step 2: Convert Script to Speech using TTS
+  if (onProgress) onProgress("Synthesizing Voice...");
+
+  const audioResponse = await ai!.models.generateContent({
+    model: "gemini-2.5-flash-preview-tts",
+    contents: [{ parts: [{ text: scriptText }] }],
+    config: {
+      responseModalities: [Modality.AUDIO],
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: { voiceName: voiceName },
+        },
+      },
+    },
+  });
+
+  if (onProgress) onProgress("Finalizing Audio...");
+
+  const audioBase64 = audioResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+
+  if (!audioBase64) {
+    throw new Error("Failed to generate audio content.");
+  }
+
+  return {
+    title: `Podcast: ${req.topic}`,
+    topic: req.topic,
+    script: scriptText,
+    audioBase64: audioBase64,
     timestamp: Date.now()
   };
 };

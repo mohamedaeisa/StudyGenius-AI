@@ -1,12 +1,14 @@
 
-
 export enum AppView {
   AUTH = 'AUTH',
   HOME = 'HOME',
   NOTES = 'NOTES',
   QUIZ = 'QUIZ',
   HOMEWORK = 'HOMEWORK',
-  DASHBOARD = 'DASHBOARD'
+  DASHBOARD = 'DASHBOARD',
+  FLASHCARDS = 'FLASHCARDS',
+  GAMIFICATION = 'GAMIFICATION',
+  PODCAST = 'PODCAST'
 }
 
 export enum EducationSystem {
@@ -46,12 +48,30 @@ export interface UserPreferences {
   defaultLanguage: Language;
 }
 
+// --- Gamification Types ---
+export interface Badge {
+  id: string;
+  icon: string;
+  nameKey: string; // Translation key
+  descKey: string; // Translation key
+  condition: (user: UserProfile, historyCount: number) => boolean;
+}
+
+export interface UserGamification {
+  xp: number;
+  level: number;
+  streak: number;
+  lastStudyDate: number; // Timestamp of last activity
+  earnedBadges: string[]; // Array of Badge IDs
+}
+
 export interface UserProfile {
   id: string;
   email: string;
   name: string;
   preferences: UserPreferences;
   joinedAt: number;
+  gamification: UserGamification; // Added field
 }
 
 export interface GenerationRequest {
@@ -59,7 +79,7 @@ export interface GenerationRequest {
   curriculum: EducationSystem;
   subject: string;
   topic: string;
-  mode: 'notes' | 'quiz' | 'homework';
+  mode: 'notes' | 'quiz' | 'homework' | 'flashcards' | 'lazy' | 'podcast';
   language: Language;
   // Notes specific
   difficulty?: Difficulty;
@@ -70,6 +90,12 @@ export interface GenerationRequest {
   // Homework specific
   homeworkImage?: string; // Base64 string
   homeworkMimeType?: string;
+  // Lazy (YouTube) specific
+  youtubeUrl?: string;
+  transcriptText?: string;
+  // Podcast specific
+  podcastLength?: 'Short' | 'Medium' | 'Long';
+  podcastVoice?: 'Male' | 'Female';
 }
 
 export interface StudyNoteData {
@@ -103,6 +129,14 @@ export interface HomeworkData {
   timestamp: number;
 }
 
+export interface PodcastData {
+  title: string;
+  topic: string;
+  script: string;
+  audioBase64: string;
+  timestamp: number;
+}
+
 export interface QuizResult {
   id: string;
   topic: string;
@@ -114,10 +148,10 @@ export interface QuizResult {
 
 export interface HistoryItem {
   id: string;
-  type: 'note' | 'quiz' | 'homework';
+  type: 'note' | 'quiz' | 'homework' | 'flashcards' | 'lazy' | 'podcast';
   title: string;
   timestamp: number;
-  data: StudyNoteData | QuizData | HomeworkData;
+  data: StudyNoteData | QuizData | HomeworkData | FlashcardSet | PodcastData;
   tags?: string[];
 }
 
@@ -129,4 +163,36 @@ export interface AnalysisResult {
   recommendations: string[];
   masteryLevel: number;
   timestamp: number;
+}
+
+// --- Types for Adaptive Learning & Flashcards ---
+
+export interface Flashcard {
+  id: string;
+  front: string;
+  back: string;
+  nextReview: number; // Timestamp
+  interval: number;   // Days
+  easeFactor: number; // Multiplier (default 2.5)
+  repetitions: number;
+}
+
+export interface FlashcardSet {
+  topic: string;
+  cards: Flashcard[];
+}
+
+export interface LearningPathItem {
+  id: string;
+  topic: string;
+  description: string;
+  type: 'note' | 'quiz' | 'flashcards';
+  status: 'locked' | 'available' | 'completed';
+  reason: string; // Why AI suggested this (e.g., "Based on weakness in Algebra")
+}
+
+export interface LearningPath {
+  subject: string;
+  items: LearningPathItem[];
+  generatedAt: number;
 }

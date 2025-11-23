@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { QuizData, QuizResult, Language, QuizQuestion } from '../types';
 import { analyzeWeakness } from '../services/geminiService';
@@ -12,9 +13,10 @@ interface QuizDisplayProps {
   language: Language;
   appLanguage: Language;
   userId: string;
+  onComplete?: (score: number, total: number) => void; // Added Prop
 }
 
-const QuizDisplay: React.FC<QuizDisplayProps> = ({ data, onBack, language, appLanguage, userId }) => {
+const QuizDisplay: React.FC<QuizDisplayProps> = ({ data, onBack, language, appLanguage, userId, onComplete }) => {
   const t = TRANSLATIONS[appLanguage];
   const [activeQuestions, setActiveQuestions] = useState<QuizQuestion[]>(data.questions);
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -28,6 +30,7 @@ const QuizDisplay: React.FC<QuizDisplayProps> = ({ data, onBack, language, appLa
   const [aiAnalysis, setAiAnalysis] = useState<string>('');
   const [analyzing, setAnalyzing] = useState(false);
   const [isReviewMode, setIsReviewMode] = useState(false);
+  const [xpAwarded, setXpAwarded] = useState(false);
 
   useEffect(() => {
     setActiveQuestions(data.questions);
@@ -39,11 +42,11 @@ const QuizDisplay: React.FC<QuizDisplayProps> = ({ data, onBack, language, appLa
     setIsReviewMode(false);
     setAiAnalysis('');
     setAnalyzing(false);
+    setXpAwarded(false);
   }, [data]);
 
   const currentQuestion = activeQuestions[currentIdx];
 
-  // Helper to compare strings robustly (trim whitespace)
   const isCorrectOption = (opt: string, correct: string) => {
     return (opt || '').trim() === (correct || '').trim();
   };
@@ -80,7 +83,7 @@ const QuizDisplay: React.FC<QuizDisplayProps> = ({ data, onBack, language, appLa
   const finishQuiz = async () => {
     setQuizCompleted(true);
     
-    if (!isReviewMode) {
+    if (!isReviewMode && !xpAwarded) {
       const result: QuizResult = {
         id: Date.now().toString(),
         topic: data.topic,
@@ -90,6 +93,11 @@ const QuizDisplay: React.FC<QuizDisplayProps> = ({ data, onBack, language, appLa
         date: Date.now()
       };
       saveQuizResult(result, userId);
+      
+      if (onComplete) {
+         onComplete(score, activeQuestions.length);
+         setXpAwarded(true);
+      }
     }
 
     if (userMistakes.length > 0 && !isReviewMode) {
@@ -126,6 +134,7 @@ const QuizDisplay: React.FC<QuizDisplayProps> = ({ data, onBack, language, appLa
     setIsAnswered(false);
     setSelectedOption(null);
     setAiAnalysis('');
+    setXpAwarded(false);
   };
 
   // --- RESULT VIEW ---
@@ -234,9 +243,9 @@ const QuizDisplay: React.FC<QuizDisplayProps> = ({ data, onBack, language, appLa
     );
   }
 
-  // --- FLASHCARD VIEW ---
+  // Flashcard mode content omitted for brevity as logic didn't change, just wrapper
   if (mode === 'flashcard') {
-    return (
+      return (
       <div className="max-w-xl mx-auto pt-10 h-[600px] flex flex-col">
          <div className="flex justify-between items-center mb-6">
           <Button variant="outline" size="sm" onClick={onBack}>{t.exit}</Button>
@@ -301,7 +310,7 @@ const QuizDisplay: React.FC<QuizDisplayProps> = ({ data, onBack, language, appLa
     );
   }
 
-  // --- STANDARD QUIZ VIEW ---
+  // Standard Quiz View
   const progressPercent = ((currentIdx) / activeQuestions.length) * 100;
 
   return (

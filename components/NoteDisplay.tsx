@@ -18,10 +18,49 @@ interface NoteDisplayProps {
   appLanguage: Language;
 }
 
+// Helper to clean common AI syntax errors in Mermaid
+const sanitizeMermaidCode = (code: string): string => {
+  let cleaned = code;
+  
+  // 1. Remove markdown block syntax if present
+  cleaned = cleaned.replace(/```mermaid/g, '').replace(/```/g, '').trim();
+
+  // 2. Ensure text inside [] is quoted (Square nodes)
+  // Regex matches [content] where content does not contain ]
+  cleaned = cleaned.replace(/\[([^\]]+)\]/g, (match, content) => {
+    const trimmed = content.trim();
+    // If already quoted, return as is
+    if (trimmed.startsWith('"') && trimmed.endsWith('"')) return match;
+    // Escape internal double quotes to single quotes to prevent breaking syntax
+    const safeContent = content.replace(/"/g, "'");
+    return `["${safeContent}"]`;
+  });
+
+  // 3. Ensure text inside {} is quoted (Rhombus/Decision nodes)
+  cleaned = cleaned.replace(/\{([^}]+)\}/g, (match, content) => {
+    const trimmed = content.trim();
+    if (trimmed.startsWith('"') && trimmed.endsWith('"')) return match;
+    const safeContent = content.replace(/"/g, "'");
+    return `{"${safeContent}"}`;
+  });
+
+  // 4. Ensure text inside () is quoted (Round nodes), ONLY if preceded by an ID
+  // Matches "id(content)" pattern to avoid breaking other syntax
+  cleaned = cleaned.replace(/(\w+)\(([^)]+)\)/g, (match, id, content) => {
+    const trimmed = content.trim();
+    if (trimmed.startsWith('"') && trimmed.endsWith('"')) return match;
+    const safeContent = content.replace(/"/g, "'");
+    return `${id}("${safeContent}")`;
+  });
+
+  return cleaned;
+};
+
 const MermaidDiagram: React.FC<{ code: string }> = ({ code }) => {
   const ref = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [svgContent, setSvgContent] = useState<string>('');
+  const [renderError, setRenderError] = useState<boolean>(false);
   
   // Interaction State
   const [scale, setScale] = useState(1);
@@ -35,21 +74,30 @@ const MermaidDiagram: React.FC<{ code: string }> = ({ code }) => {
         startOnLoad: true, 
         theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
         securityLevel: 'loose',
+        logLevel: 5 // Error only
       });
       
       const renderDiagram = async () => {
-        if (ref.current) {
-          try {
-            const id = `mermaid-${Math.round(Math.random() * 10000)}`;
-            const { svg } = await window.mermaid.render(id, code);
+        // Reset states
+        setRenderError(false);
+        setSvgContent('');
+
+        if (!code.trim()) return;
+
+        try {
+            const cleanCode = sanitizeMermaidCode(code);
+            const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
+            
+            // Render returns { svg: string } in v10+
+            const { svg } = await window.mermaid.render(id, cleanCode);
+            
             setSvgContent(svg);
             // Reset view on new render
             setScale(1);
             setPosition({ x: 0, y: 0 });
-          } catch (e) {
+        } catch (e) {
             console.error('Mermaid render error:', e);
-            ref.current!.innerHTML = '<div class="text-red-500 p-4">Error rendering diagram</div>';
-          }
+            setRenderError(true);
         }
       };
       renderDiagram();
@@ -58,10 +106,6 @@ const MermaidDiagram: React.FC<{ code: string }> = ({ code }) => {
 
   const handleWheel = (e: React.WheelEvent) => {
     e.stopPropagation(); 
-    // Only zoom if ctrl key is pressed or if it's a specific area, 
-    // but for better UX, let's just use buttons for zoom usually, 
-    // or intercept wheel only if we want specific behavior. 
-    // Here we will implement pinch-to-zoom logic for trackpads or ctrl+wheel
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       const delta = e.deltaY * -0.01;
@@ -71,6 +115,7 @@ const MermaidDiagram: React.FC<{ code: string }> = ({ code }) => {
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    if (renderError) return;
     setIsDragging(true);
     setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
   };
@@ -98,41 +143,57 @@ const MermaidDiagram: React.FC<{ code: string }> = ({ code }) => {
 
   return (
     <div className="my-8 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm bg-slate-50 dark:bg-slate-800/50 relative group h-[500px]">
-      {/* Controls */}
-      <div className="absolute top-4 right-4 z-20 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 dark:bg-slate-900/90 p-1.5 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700">
-        <button onClick={zoomIn} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-300 transition-colors" title="Zoom In">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-        </button>
-        <button onClick={zoomOut} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-300 transition-colors" title="Zoom Out">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4"></path></svg>
-        </button>
-        <button onClick={resetView} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-300 transition-colors" title="Reset View">
-           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-        </button>
-      </div>
+      {/* Controls (Hidden if error) */}
+      {!renderError && (
+        <>
+          <div className="absolute top-4 right-4 z-20 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 dark:bg-slate-900/90 p-1.5 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700">
+            <button onClick={zoomIn} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-300 transition-colors" title="Zoom In">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+            </button>
+            <button onClick={zoomOut} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-300 transition-colors" title="Zoom Out">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4"></path></svg>
+            </button>
+            <button onClick={resetView} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-300 transition-colors" title="Reset View">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            </button>
+          </div>
 
-      <div className="absolute bottom-4 left-4 z-20 pointer-events-none opacity-50 text-xs text-slate-500 bg-white/50 dark:bg-slate-900/50 px-2 py-1 rounded">
-        Drag to pan • Scroll to zoom
-      </div>
+          <div className="absolute bottom-4 left-4 z-20 pointer-events-none opacity-50 text-xs text-slate-500 bg-white/50 dark:bg-slate-900/50 px-2 py-1 rounded">
+            Drag to pan • Scroll to zoom
+          </div>
+        </>
+      )}
 
       {/* Diagram Container */}
       <div 
         ref={containerRef}
-        className={`w-full h-full overflow-hidden cursor-${isDragging ? 'grabbing' : 'grab'} bg-dot-pattern`}
+        className={`w-full h-full overflow-hidden ${renderError ? 'cursor-default' : `cursor-${isDragging ? 'grabbing' : 'grab'}`} bg-dot-pattern`}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
-        <div 
-          ref={ref}
-          className="w-full h-full flex items-center justify-center transition-transform duration-75 ease-out origin-center"
-          style={{ 
-            transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`
-          }}
-          dangerouslySetInnerHTML={{ __html: svgContent }}
-        />
+        {renderError ? (
+          <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center animate-fade-in">
+            <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4 text-red-500 text-2xl border border-red-200 dark:border-red-800">
+                ⚠️
+            </div>
+            <h3 className="text-lg font-bold text-slate-700 dark:text-slate-200 mb-2">Diagram Visualization Failed</h3>
+            <p className="text-slate-500 dark:text-slate-400 text-sm max-w-xs leading-relaxed">
+                The AI generated a complex structure that couldn't be visualized automatically. The text content below contains all the necessary information.
+            </p>
+          </div>
+        ) : (
+          <div 
+            ref={ref}
+            className="w-full h-full flex items-center justify-center transition-transform duration-75 ease-out origin-center"
+            style={{ 
+              transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`
+            }}
+            dangerouslySetInnerHTML={{ __html: svgContent }}
+          />
+        )}
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { AppView, Language, UserProfile } from '../types';
 import { getStoredTheme, saveStoredTheme, saveStoredLanguage } from '../services/storageService';
 import { TRANSLATIONS } from '../constants';
+import GamificationBar from './GamificationBar';
 
 interface LayoutProps {
   currentView: AppView;
@@ -87,6 +88,12 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onNavigate, children, appL
                   >
                     {t.menuDashboard}
                   </button>
+                  <button
+                    onClick={() => onNavigate(AppView.GAMIFICATION)}
+                    className={`text-sm font-medium transition-colors ${currentView === AppView.GAMIFICATION ? 'text-brand-600' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'}`}
+                  >
+                    {t.menuGamification}
+                  </button>
                 </nav>
               )}
 
@@ -136,7 +143,10 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onNavigate, children, appL
         </div>
       </header>
 
-      <main className="flex-grow pt-24 pb-24 md:pb-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
+      {/* Gamification Bar */}
+      {user && user.gamification && <GamificationBar user={user} appLanguage={appLanguage} />}
+
+      <main className="flex-grow pt-8 pb-24 md:pb-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
         {children}
       </main>
 
@@ -156,6 +166,13 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onNavigate, children, appL
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
               <span className="text-xs font-medium">{t.menuDashboard}</span>
+            </button>
+            <button 
+              onClick={() => onNavigate(AppView.GAMIFICATION)}
+              className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${currentView === AppView.GAMIFICATION ? 'text-brand-600' : 'text-slate-500 dark:text-slate-400'}`}
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg>
+              <span className="text-xs font-medium">{t.menuGamification}</span>
             </button>
           </div>
         </nav>

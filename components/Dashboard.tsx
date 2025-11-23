@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { HistoryItem, Language, UserProfile, AnalysisResult, QuizResult } from '../types';
-import { getHistory, getQuizResults, updateHistoryItem, getAnalysis, saveAnalysis } from '../services/storageService';
-import { generateProgressReport } from '../services/geminiService';
-import { TRANSLATIONS } from '../constants';
+import { HistoryItem, Language, UserProfile, AnalysisResult, QuizResult, LearningPath, Flashcard, GenerationRequest } from '../types';
+import { getHistory, getQuizResults, updateHistoryItem, getAnalysis, saveAnalysis, getLearningPath, saveLearningPath, getFlashcards } from '../services/storageService';
+import { generateProgressReport, generateLearningPath } from '../services/geminiService';
+import { TRANSLATIONS, SUBJECTS } from '../constants';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -12,9 +12,11 @@ interface DashboardProps {
   onLoadItem: (item: HistoryItem) => void;
   appLanguage: Language;
   user: UserProfile;
+  onReviewFlashcards: (cards: Flashcard[]) => void;
+  onStartPathItem: (req: Partial<GenerationRequest>) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onLoadItem, appLanguage, user }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onLoadItem, appLanguage, user, onReviewFlashcards, onStartPathItem }) => {
   const t = TRANSLATIONS[appLanguage];
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [results, setResults] = useState<QuizResult[]>([]);
@@ -26,11 +28,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onLoadItem, appLanguage, user }) 
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
+  // New Features State
+  const [learningPath, setLearningPath] = useState<LearningPath | null>(null);
+  const [isPathGenerating, setIsPathGenerating] = useState(false);
+  const [dueFlashcards, setDueFlashcards] = useState<Flashcard[]>([]);
+
   // Fetch data specific to the logged-in user
   useEffect(() => {
     setHistory(getHistory(user.id));
     setResults(getQuizResults(user.id).reverse().slice(0, 10));
     setAnalysis(getAnalysis(user.id));
+    setLearningPath(getLearningPath(user.id));
+    
+    // Check flashcards
+    const allCards = getFlashcards(user.id);
+    const now = Date.now();
+    setDueFlashcards(allCards.filter(c => c.nextReview <= now));
   }, [user.id]);
 
   const handleGenerateAnalysis = async () => {
@@ -48,6 +61,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onLoadItem, appLanguage, user }) 
       alert(errorMsg);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleGeneratePath = async () => {
+    setIsPathGenerating(true);
+    try {
+      // Analyze weak areas based on analysis or defaults
+      const weakAreas = analysis?.weaknesses || [];
+      const path = await generateLearningPath(user, weakAreas, SUBJECTS[0]); // Default to first subject or make user pick
+      setLearningPath(path);
+      saveLearningPath(path, user.id);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to generate learning path.");
+    } finally {
+      setIsPathGenerating(false);
     }
   };
 
@@ -80,10 +109,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLoadItem, appLanguage, user }) 
       }
 
       const updatedTags = [...currentTags, tagToAdd];
-      
       updateHistoryItem(itemId, { tags: updatedTags }, user.id);
       
-      // Update local state to reflect change immediately
       setHistory(prev => prev.map(i => i.id === itemId ? { ...i, tags: updatedTags } : i));
       setNewTagValue('');
       setTagInputOpen(null);
@@ -91,7 +118,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLoadItem, appLanguage, user }) 
   };
 
   const handleRemoveTag = (e: React.MouseEvent, itemId: string, tagToRemove: string) => {
-    e.stopPropagation(); // Prevent opening the item
+    e.stopPropagation(); 
     const item = history.find(i => i.id === itemId);
     if (item) {
       const updatedTags = (item.tags || []).filter(t => t !== tagToRemove);
@@ -111,7 +138,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLoadItem, appLanguage, user }) 
     return 'text-red-600 bg-red-100 dark:bg-red-900/30';
   };
 
-  // Determine current stats for display (fallback if no analysis)
+  // Fallback if no analysis
   const localAvg = results.length > 0 
     ? Math.round(results.reduce((a: number, b: QuizResult) => a + b.percentage, 0) / results.length) 
     : 0;
@@ -129,7 +156,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLoadItem, appLanguage, user }) 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in pb-20">
       
-      {/* Analytics Column */}
+      {/* Analytics Column (Left - 2 Cols) */}
       <div className="lg:col-span-2 space-y-8">
         
         {/* AI Progress Tracker Card */}
@@ -241,7 +268,67 @@ const Dashboard: React.FC<DashboardProps> = ({ onLoadItem, appLanguage, user }) 
           )}
         </Card>
 
-        {/* Standard Analytics */}
+        {/* Adaptive Learning Path */}
+        <Card>
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                 🧭 {t.adaptivePath}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">{t.pathIntro}</p>
+            </div>
+            {!learningPath && (
+               <Button size="sm" onClick={handleGeneratePath} isLoading={isPathGenerating}>
+                 {t.generatePath}
+               </Button>
+            )}
+          </div>
+          
+          {learningPath ? (
+            <div className="relative border-l-2 border-slate-200 dark:border-slate-700 ml-3 space-y-8 pl-6 py-2">
+              {learningPath.items.map((item, index) => (
+                 <div key={item.id} className="relative group">
+                   <span className={`absolute -left-[33px] top-1 h-4 w-4 rounded-full border-2 ${
+                     item.status === 'completed' ? 'bg-green-500 border-green-500' :
+                     item.status === 'available' ? 'bg-white border-brand-500 animate-pulse' :
+                     'bg-slate-200 border-slate-300'
+                   }`}></span>
+                   
+                   <div className={`p-4 rounded-lg border transition-all ${
+                      item.status === 'available' ? 'bg-white dark:bg-slate-800 border-brand-200 dark:border-brand-900 shadow-md' :
+                      item.status === 'completed' ? 'bg-green-50 dark:bg-green-900/10 border-green-100 dark:border-green-900 opacity-80' :
+                      'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 opacity-60 grayscale'
+                   }`}>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 block">Step {index + 1} • {item.type}</span>
+                          <h4 className="font-bold text-lg">{item.topic}</h4>
+                          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{item.reason}</p>
+                        </div>
+                        {item.status === 'available' && (
+                           <Button size="sm" onClick={() => onStartPathItem({
+                             topic: item.topic,
+                             mode: item.type as any,
+                             subject: learningPath.subject
+                           })}>
+                             {t.startTopic} →
+                           </Button>
+                        )}
+                        {item.status === 'locked' && <span className="text-xs text-slate-400 flex items-center gap-1">🔒 {t.locked}</span>}
+                        {item.status === 'completed' && <span className="text-xs text-green-600 font-bold flex items-center gap-1">✓ {t.completed}</span>}
+                      </div>
+                   </div>
+                 </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-slate-500 italic bg-slate-50 dark:bg-slate-900/50 rounded-lg">
+               Click "Create AI Study Path" to generate a curriculum.
+            </div>
+          )}
+        </Card>
+
+        {/* Standard Analytics Chart */}
         <Card>
           <div className="flex justify-between items-center mb-6">
              <h3 className="text-lg font-bold">{t.perfTrend}</h3>
@@ -273,143 +360,165 @@ const Dashboard: React.FC<DashboardProps> = ({ onLoadItem, appLanguage, user }) 
             </div>
           )}
         </Card>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <Card className="bg-gradient-to-br from-brand-500 to-indigo-600 text-white border-none">
-                <div className="text-4xl font-bold mb-1">{results.length}</div>
-                <div className="text-indigo-100 text-sm">{t.quizzesCompleted}</div>
-             </Card>
-             <Card className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white border-none">
-                <div className="text-4xl font-bold mb-1">
-                  {results.length > 0 ? Math.round(results.reduce((a: number, b: QuizResult) => a + b.percentage, 0) / results.length) : 0}%
-                </div>
-                <div className="text-emerald-100 text-sm">{t.avgScore}</div>
-             </Card>
-        </div>
       </div>
 
-      {/* History Column */}
-      <div className="lg:col-span-1">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold">{t.recentGen}</h3>
+      {/* History & Due Items Column (Right) */}
+      <div className="lg:col-span-1 space-y-6">
+        
+        {/* Due Flashcards Box */}
+        <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
+           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2"></div>
+           <h3 className="font-bold text-lg mb-4 flex items-center gap-2 relative z-10">
+              🗂 {t.dueFlashcards}
+           </h3>
+           
+           {dueFlashcards.length > 0 ? (
+             <div className="relative z-10">
+               <div className="text-4xl font-black mb-2">{dueFlashcards.length}</div>
+               <p className="text-indigo-100 text-sm mb-6">{t.cardsReady}</p>
+               <Button 
+                 variant="secondary" 
+                 className="w-full shadow-lg shadow-indigo-900/20"
+                 onClick={() => onReviewFlashcards(dueFlashcards)}
+               >
+                 {t.reviewNow}
+               </Button>
+             </div>
+           ) : (
+             <div className="text-indigo-200 text-sm relative z-10 py-4">
+               {t.noDueCards}
+             </div>
+           )}
         </div>
 
-        {/* Tags Filter Bar */}
-        {allTags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            <button
-              onClick={() => setActiveTag(null)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                activeTag === null 
-                  ? 'bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900' 
-                  : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
-              }`}
-            >
-              {t.all}
-            </button>
-            {allTags.map(tag => (
+        {/* History List */}
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold">{t.recentGen}</h3>
+          </div>
+
+          {/* Tags Filter Bar */}
+          {allTags.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-4">
               <button
-                key={tag}
-                onClick={() => setActiveTag(tag === activeTag ? null : tag)}
+                onClick={() => setActiveTag(null)}
                 className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                  activeTag === tag 
-                    ? 'bg-brand-600 text-white' 
-                    : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 hover:bg-brand-100 hover:text-brand-700 dark:hover:bg-slate-600'
+                  activeTag === null 
+                    ? 'bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900' 
+                    : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
                 }`}
               >
-                {tag}
+                {t.all}
               </button>
-            ))}
-          </div>
-        )}
-
-        <div className="space-y-3">
-          {filteredHistory.length === 0 && (
-            <p className="text-slate-500 italic text-sm text-center py-8">
-              {history.length === 0 ? t.noActivity : t.noFilterMatch}
-            </p>
+              {allTags.map(tag => (
+                <button
+                  key={tag}
+                  onClick={() => setActiveTag(tag === activeTag ? null : tag)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    activeTag === tag 
+                      ? 'bg-brand-600 text-white' 
+                      : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 hover:bg-brand-100 hover:text-brand-700 dark:hover:bg-slate-600'
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
           )}
-          
-          {filteredHistory.map((item) => (
-            <div 
-              key={item.id} 
-              className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md transition-all group relative"
-            >
+
+          <div className="space-y-3">
+            {filteredHistory.length === 0 && (
+              <p className="text-slate-500 italic text-sm text-center py-8">
+                {history.length === 0 ? t.noActivity : t.noFilterMatch}
+              </p>
+            )}
+            
+            {filteredHistory.map((item) => (
               <div 
-                className="cursor-pointer"
-                onClick={() => onLoadItem(item)}
+                key={item.id} 
+                className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md transition-all group relative"
               >
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <h4 className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-brand-600 transition-colors line-clamp-1 ltr:pr-4 rtl:pl-4">
-                      {item.title}
-                    </h4>
-                    <p className="text-xs text-slate-500 mt-1 capitalize flex items-center gap-2">
-                      <span>{item.type === 'note' ? t.modeNotes : item.type === 'quiz' ? t.modeQuiz : t.modeHomework}</span>
-                      <span>•</span>
-                      <span>{new Date(item.timestamp).toLocaleDateString()}</span>
-                    </p>
+                <div 
+                  className="cursor-pointer"
+                  onClick={() => onLoadItem(item)}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h4 className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-brand-600 transition-colors line-clamp-1 ltr:pr-4 rtl:pl-4">
+                        {item.title}
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-1 capitalize flex items-center gap-2">
+                        <span>{item.type === 'note' ? t.modeNotes : item.type === 'quiz' ? t.modeQuiz : item.type === 'homework' ? t.modeHomework : t.modeFlashcards}</span>
+                        <span>•</span>
+                        <span>{new Date(item.timestamp).toLocaleDateString()}</span>
+                      </p>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider ${
+                      item.type === 'note' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' : 
+                      item.type === 'quiz' ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 
+                      item.type === 'homework' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                      'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+                    }`}>
+                      {item.type === 'note' ? t.doc : item.type === 'quiz' ? t.quizShort : item.type === 'homework' ? t.chk : t.cardShort}
+                    </span>
                   </div>
-                  <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider ${item.type === 'note' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' : item.type === 'quiz' ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300'}`}>
-                    {item.type === 'note' ? t.doc : item.type === 'quiz' ? t.quizShort : t.chk}
-                  </span>
+                </div>
+
+                {/* Tags Section */}
+                <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+                  {item.tags?.map(tag => (
+                    <span key={tag} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
+                      {tag}
+                      <button 
+                        onClick={(e) => handleRemoveTag(e, item.id, tag)}
+                        className="ltr:ml-1 rtl:mr-1 text-slate-400 hover:text-red-500 focus:outline-none"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                  
+                  {tagInputOpen === item.id ? (
+                    <div className="flex items-center gap-1 animate-fade-in">
+                      <input
+                        type="text"
+                        autoFocus
+                        className="w-24 text-xs px-2 py-1 rounded border border-brand-300 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:bg-slate-900 dark:border-slate-600"
+                        placeholder={t.addTag}
+                        value={newTagValue}
+                        onChange={(e) => setNewTagValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleAddTag(item.id);
+                          if (e.key === 'Escape') {
+                            setTagInputOpen(null);
+                            setNewTagValue('');
+                          }
+                        }}
+                      />
+                      <button 
+                        onClick={() => handleAddTag(item.id)}
+                        className="text-brand-600 hover:text-brand-700"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                      </button>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTagInputOpen(item.id);
+                        setNewTagValue('');
+                      }}
+                      className="text-xs text-slate-400 hover:text-brand-600 flex items-center gap-1 transition-colors px-1 py-0.5 rounded hover:bg-slate-50 dark:hover:bg-slate-700"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
+                      {t.addTag}
+                    </button>
+                  )}
                 </div>
               </div>
-
-              {/* Tags Section */}
-              <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
-                {item.tags?.map(tag => (
-                  <span key={tag} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
-                    {tag}
-                    <button 
-                      onClick={(e) => handleRemoveTag(e, item.id, tag)}
-                      className="ltr:ml-1 rtl:mr-1 text-slate-400 hover:text-red-500 focus:outline-none"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-                
-                {tagInputOpen === item.id ? (
-                  <div className="flex items-center gap-1 animate-fade-in">
-                    <input
-                      type="text"
-                      autoFocus
-                      className="w-24 text-xs px-2 py-1 rounded border border-brand-300 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:bg-slate-900 dark:border-slate-600"
-                      placeholder={t.addTag}
-                      value={newTagValue}
-                      onChange={(e) => setNewTagValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleAddTag(item.id);
-                        if (e.key === 'Escape') {
-                          setTagInputOpen(null);
-                          setNewTagValue('');
-                        }
-                      }}
-                    />
-                    <button 
-                      onClick={() => handleAddTag(item.id)}
-                      className="text-brand-600 hover:text-brand-700"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                    </button>
-                  </div>
-                ) : (
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setTagInputOpen(item.id);
-                      setNewTagValue('');
-                    }}
-                    className="text-xs text-slate-400 hover:text-brand-600 flex items-center gap-1 transition-colors px-1 py-0.5 rounded hover:bg-slate-50 dark:hover:bg-slate-700"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
-                    {t.addTag}
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </div>
