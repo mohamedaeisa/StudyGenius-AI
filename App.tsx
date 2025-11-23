@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import AuthScreen from './components/AuthScreen';
@@ -6,6 +7,7 @@ import NoteDisplay from './components/NoteDisplay';
 import QuizDisplay from './components/QuizDisplay';
 import HomeworkDisplay from './components/HomeworkDisplay';
 import Dashboard from './components/Dashboard';
+import { Analytics } from '@vercel/analytics/react';
 import { 
   AppView, 
   GenerationRequest, 
@@ -194,16 +196,19 @@ const App: React.FC = () => {
   };
 
   return (
-    <Layout 
-      currentView={currentView} 
-      onNavigate={setCurrentView} 
-      appLanguage={appLanguage} 
-      setAppLanguage={setAppLanguage}
-      user={currentUser}
-      onLogout={handleLogout}
-    >
-      {renderContent()}
-    </Layout>
+    <>
+      <Layout 
+        currentView={currentView} 
+        onNavigate={setCurrentView} 
+        appLanguage={appLanguage} 
+        setAppLanguage={setAppLanguage}
+        user={currentUser}
+        onLogout={handleLogout}
+      >
+        {renderContent()}
+      </Layout>
+      <Analytics />
+    </>
   );
 };
 
