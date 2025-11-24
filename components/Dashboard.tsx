@@ -33,6 +33,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLoadItem, appLanguage, user, on
   const [isPathGenerating, setIsPathGenerating] = useState(false);
   const [dueFlashcards, setDueFlashcards] = useState<Flashcard[]>([]);
 
+  // Path Generation Mode State
+  const [showPathConfig, setShowPathConfig] = useState(false);
+  const [pathMode, setPathMode] = useState<'analysis' | 'custom'>('analysis');
+  const [customPathGoal, setCustomPathGoal] = useState('');
+
   // Fetch data specific to the logged-in user
   useEffect(() => {
     setHistory(getHistory(user.id));
@@ -69,9 +74,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onLoadItem, appLanguage, user, on
     try {
       // Analyze weak areas based on analysis or defaults
       const weakAreas = analysis?.weaknesses || [];
-      const path = await generateLearningPath(user, weakAreas, SUBJECTS[0]); // Default to first subject or make user pick
+      
+      // Determine subject and goal
+      // If custom mode, pass the custom goal string
+      // If analysis mode, pass nothing for customGoal, allowing default weakness logic
+      const finalCustomGoal = pathMode === 'custom' ? customPathGoal : undefined;
+      
+      const path = await generateLearningPath(
+        user, 
+        weakAreas, 
+        SUBJECTS[0], // Default subject context, AI will override based on goal if needed
+        finalCustomGoal
+      );
+      
       setLearningPath(path);
       saveLearningPath(path, user.id);
+      setShowPathConfig(false); // Close config on success
     } catch (e) {
       console.error(e);
       alert("Failed to generate learning path.");
@@ -270,19 +288,69 @@ const Dashboard: React.FC<DashboardProps> = ({ onLoadItem, appLanguage, user, on
 
         {/* Adaptive Learning Path */}
         <Card>
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
             <div>
               <h3 className="text-xl font-bold flex items-center gap-2">
                  🧭 {t.adaptivePath}
               </h3>
               <p className="text-xs text-slate-500 mt-1">{t.pathIntro}</p>
             </div>
-            {!learningPath && (
-               <Button size="sm" onClick={handleGeneratePath} isLoading={isPathGenerating}>
+            {!learningPath ? (
+               <Button size="sm" onClick={() => setShowPathConfig(true)}>
                  {t.generatePath}
+               </Button>
+            ) : (
+               <Button size="sm" variant="outline" onClick={() => setShowPathConfig(!showPathConfig)}>
+                 {t.regeneratePath}
                </Button>
             )}
           </div>
+
+          {/* Path Configuration / Generation Form */}
+          {showPathConfig && (
+            <div className="mb-8 p-6 bg-slate-50 dark:bg-slate-800 rounded-xl border border-brand-200 dark:border-brand-900 animate-slide-up">
+               <h4 className="font-bold text-slate-800 dark:text-white mb-4">Customize Your Path</h4>
+               
+               <div className="flex gap-4 mb-4">
+                  <button 
+                    onClick={() => setPathMode('analysis')}
+                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium border-2 transition-all ${pathMode === 'analysis' ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-300' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500'}`}
+                  >
+                    {t.pathModeWeakness}
+                  </button>
+                  <button 
+                    onClick={() => setPathMode('custom')}
+                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium border-2 transition-all ${pathMode === 'custom' ? 'border-purple-500 bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500'}`}
+                  >
+                    {t.pathModeCustom}
+                  </button>
+               </div>
+
+               {pathMode === 'custom' && (
+                 <div className="mb-4">
+                    <input 
+                      type="text" 
+                      placeholder={t.pathCustomPlaceholder}
+                      value={customPathGoal}
+                      onChange={(e) => setCustomPathGoal(e.target.value)}
+                      className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 focus:ring-2 focus:ring-purple-500 outline-none"
+                    />
+                 </div>
+               )}
+
+               <div className="flex justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setShowPathConfig(false)}>Cancel</Button>
+                  <Button 
+                    size="sm" 
+                    onClick={handleGeneratePath} 
+                    isLoading={isPathGenerating}
+                    disabled={pathMode === 'custom' && !customPathGoal.trim()}
+                  >
+                    {isPathGenerating ? 'Creating Plan...' : 'Create Plan'}
+                  </Button>
+               </div>
+            </div>
+          )}
           
           {learningPath ? (
             <div className="relative border-l-2 border-slate-200 dark:border-slate-700 ml-3 space-y-8 pl-6 py-2">
@@ -301,15 +369,29 @@ const Dashboard: React.FC<DashboardProps> = ({ onLoadItem, appLanguage, user, on
                    }`}>
                       <div className="flex justify-between items-start">
                         <div>
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 block">Step {index + 1} • {item.type}</span>
+                          <div className="flex items-center gap-2 mb-1">
+                             <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Step {index + 1} • {item.type}</span>
+                             {item.difficulty && (
+                               <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold border ${
+                                 item.difficulty === 'Easy' ? 'text-green-600 border-green-200 bg-green-50' :
+                                 item.difficulty === 'Medium' ? 'text-amber-600 border-amber-200 bg-amber-50' :
+                                 'text-red-600 border-red-200 bg-red-50'
+                               }`}>
+                                 {item.difficulty}
+                               </span>
+                             )}
+                          </div>
                           <h4 className="font-bold text-lg">{item.topic}</h4>
                           <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{item.reason}</p>
                         </div>
                         {item.status === 'available' && (
                            <Button size="sm" onClick={() => onStartPathItem({
                              topic: item.topic,
-                             mode: item.type as any,
-                             subject: learningPath.subject
+                             // Fix: Map singular 'note' to plural 'notes' if coming from old data, 
+                             // otherwise pass exact type (new prompt returns 'notes')
+                             mode: ((item.type as string) === 'note' || item.type === 'notes') ? 'notes' : item.type as any,
+                             subject: learningPath.subject,
+                             difficulty: item.difficulty === 'Easy' ? 'Easy' : item.difficulty === 'Hard' ? 'Hard' : 'Medium' as any
                            })}>
                              {t.startTopic} →
                            </Button>
@@ -323,7 +405,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLoadItem, appLanguage, user, on
             </div>
           ) : (
             <div className="text-center py-8 text-slate-500 italic bg-slate-50 dark:bg-slate-900/50 rounded-lg">
-               Click "Create AI Study Path" to generate a curriculum.
+               {!showPathConfig && 'Click "Create AI Study Path" to generate a curriculum.'}
             </div>
           )}
         </Card>

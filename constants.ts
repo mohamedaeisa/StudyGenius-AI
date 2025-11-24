@@ -8,7 +8,7 @@ export const YEARS = [
 ];
 
 export const SUBJECTS = [
-  'Mathematics', 'Physics', 'Chemistry', 'Biology', 'History', 
+  'Mathematics', 'Physics', 'Chemistry', 'Biology', 'Science', 'French', 'History', 
   'Geography', 'Computer Science', 'English Literature', 'Psychology', 
   'Economics', 'Business Studies'
 ];
@@ -31,7 +31,8 @@ export const XP_REWARDS = {
   REVIEW_SESSION: 40,
   CHECK_HOMEWORK: 15,
   DAILY_STREAK: 10,
-  LISTEN_PODCAST: 25
+  LISTEN_PODCAST: 25,
+  GENERATE_CHEAT_SHEET: 30
 };
 
 export const LEVEL_THRESHOLD = 200; // XP needed per level (simplified linear for now)
@@ -99,6 +100,7 @@ export const TRANSLATIONS = {
     modeFlashcards: "Flashcards",
     modeLazy: "YouTube / Lazy",
     modePodcast: "AI Podcast",
+    modeCheatSheet: "Cheat Sheet",
     language: "Language",
     detailLevel: "Detail Level",
     difficulty: "Difficulty",
@@ -112,6 +114,7 @@ export const TRANSLATIONS = {
     btnGenerateFlashcards: "Create Cards",
     btnLazy: "Summarize Video",
     btnPodcast: "Create Podcast",
+    btnGenerateCheatSheet: "Generate Sheet",
     shareApp: "Share App",
     appLinkCopied: "App link copied!",
     
@@ -144,6 +147,7 @@ export const TRANSLATIONS = {
     cardShort: "CARD",
     lazyShort: "YT",
     podShort: "POD",
+    csShort: "CS",
     aiProgressReport: "AI Progress Tracker",
     generateAnalysis: "Generate Analysis",
     refreshAnalysis: "Update Analysis",
@@ -196,6 +200,10 @@ export const TRANSLATIONS = {
     ratingHard: "Hard (2d)",
     ratingGood: "Good (3d)",
     ratingEasy: "Easy (4d)",
+    regeneratePath: "Refresh Path",
+    pathModeWeakness: "Improve Weaknesses",
+    pathModeCustom: "Custom Goal",
+    pathCustomPlaceholder: "e.g. Prepare for Algebra Finals, Learn about Space...",
     
     // Lazy/YouTube & Podcast
     youtubeUrl: "YouTube Video URL",
@@ -204,6 +212,7 @@ export const TRANSLATIONS = {
     transcriptPlaceholder: "Paste the video transcript here if the video is new or not famous...",
     lazyIntro: "Paste a YouTube link. We'll extract the key lessons and make a quiz.",
     podcastIntro: "Convert any topic into a short, engaging audio podcast. Perfect for commuting!",
+    cheatSheetIntro: "Get a dense, one-page summary of key formulas and concepts.",
     podcastTopicPlaceholder: "e.g. The French Revolution, Quantum Mechanics...",
     podcastLength: "Duration",
     podcastVoice: "Voice",
@@ -275,6 +284,7 @@ export const TRANSLATIONS = {
     modeFlashcards: "بطاقات استذكار",
     modeLazy: "يوتيوب / السريع",
     modePodcast: "بودكاست ذكي",
+    modeCheatSheet: "ورقة المراجعة",
     language: "اللغة",
     detailLevel: "مستوى التفصيل",
     difficulty: "الصعوبة",
@@ -288,6 +298,7 @@ export const TRANSLATIONS = {
     btnGenerateFlashcards: "إنشاء البطاقات",
     btnLazy: "تلخيص الفيديو",
     btnPodcast: "إنشاء بودكاست",
+    btnGenerateCheatSheet: "إنشاء الورقة",
     shareApp: "مشاركة التطبيق",
     appLinkCopied: "تم نسخ الرابط!",
 
@@ -320,6 +331,7 @@ export const TRANSLATIONS = {
     cardShort: "بطاقة",
     lazyShort: "يوتيوب",
     podShort: "صوت",
+    csShort: "ملخص",
     aiProgressReport: "متتبع التقدم الذكي",
     generateAnalysis: "تحليل التقدم",
     refreshAnalysis: "تحديث التحليل",
@@ -372,6 +384,10 @@ export const TRANSLATIONS = {
     ratingHard: "صعب (يومان)",
     ratingGood: "جيد (3 أيام)",
     ratingEasy: "سهل (4 أيام)",
+    regeneratePath: "تحديث المسار",
+    pathModeWeakness: "تحسين نقاط الضعف",
+    pathModeCustom: "هدف مخصص",
+    pathCustomPlaceholder: "مثال: التحضير لاختبار الجبر، تعلم الفضاء...",
 
     // Lazy/YouTube & Podcast
     youtubeUrl: "رابط فيديو يوتيوب",
@@ -380,6 +396,7 @@ export const TRANSLATIONS = {
     transcriptPlaceholder: "الصق نص الفيديو هنا إذا كان الفيديو جديداً أو غير مشهور...",
     lazyIntro: "ضع رابط يوتيوب. سنستخرج أهم الدروس وننشئ اختباراً.",
     podcastIntro: "حول أي موضوع إلى بودكاست صوتي قصير. مثالي للمواصلات!",
+    cheatSheetIntro: "احصل على ملخص مكثف من صفحة واحدة لأهم القوانين والمفاهيم.",
     podcastTopicPlaceholder: "مثال: الثورة الفرنسية، ميكانيكا الكم...",
     podcastLength: "المدة",
     podcastVoice: "الصوت",

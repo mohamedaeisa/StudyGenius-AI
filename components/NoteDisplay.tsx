@@ -25,33 +25,38 @@ const sanitizeMermaidCode = (code: string): string => {
   // 1. Remove markdown block syntax if present
   cleaned = cleaned.replace(/```mermaid/g, '').replace(/```/g, '').trim();
 
+  // Helper function to safely quote content
+  const fixContent = (content: string) => {
+    let text = content.trim();
+    // Check if already wrapped in quotes
+    // We strip them to ensure we can safely escape any INTERNAL quotes that might break syntax
+    if (text.length >= 2 && text.startsWith('"') && text.endsWith('"')) {
+      text = text.slice(1, -1);
+    }
+    // Escape internal double quotes to single quotes to prevent breaking the outer quotes
+    text = text.replace(/"/g, "'");
+    return `"${text}"`;
+  };
+
   // 2. Ensure text inside [] is quoted (Square nodes)
-  // Regex matches [content] where content does not contain ]
   cleaned = cleaned.replace(/\[([^\]]+)\]/g, (match, content) => {
-    const trimmed = content.trim();
-    // If already quoted, return as is
-    if (trimmed.startsWith('"') && trimmed.endsWith('"')) return match;
-    // Escape internal double quotes to single quotes to prevent breaking syntax
-    const safeContent = content.replace(/"/g, "'");
-    return `["${safeContent}"]`;
+    return `[${fixContent(content)}]`;
   });
 
   // 3. Ensure text inside {} is quoted (Rhombus/Decision nodes)
   cleaned = cleaned.replace(/\{([^}]+)\}/g, (match, content) => {
-    const trimmed = content.trim();
-    if (trimmed.startsWith('"') && trimmed.endsWith('"')) return match;
-    const safeContent = content.replace(/"/g, "'");
-    return `{"${safeContent}"}`;
+    return `{${fixContent(content)}}`;
   });
 
   // 4. Ensure text inside () is quoted (Round nodes), ONLY if preceded by an ID
-  // Matches "id(content)" pattern to avoid breaking other syntax
+  // Matches "id(content)" pattern. 
+  // Note: This simple regex might struggle with nested parentheses, but handles most AI output.
   cleaned = cleaned.replace(/(\w+)\(([^)]+)\)/g, (match, id, content) => {
-    const trimmed = content.trim();
-    if (trimmed.startsWith('"') && trimmed.endsWith('"')) return match;
-    const safeContent = content.replace(/"/g, "'");
-    return `${id}("${safeContent}")`;
+    return `${id}(${fixContent(content)})`;
   });
+
+  // 5. Remove excessive empty lines to prevent rendering gaps
+  cleaned = cleaned.replace(/^\s*[\r\n]/gm, '');
 
   return cleaned;
 };

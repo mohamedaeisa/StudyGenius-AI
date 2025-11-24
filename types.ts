@@ -8,7 +8,8 @@ export enum AppView {
   DASHBOARD = 'DASHBOARD',
   FLASHCARDS = 'FLASHCARDS',
   GAMIFICATION = 'GAMIFICATION',
-  PODCAST = 'PODCAST'
+  PODCAST = 'PODCAST',
+  CHEAT_SHEET = 'CHEAT_SHEET'
 }
 
 export enum EducationSystem {
@@ -80,7 +81,7 @@ export interface GenerationRequest {
   curriculum: EducationSystem;
   subject: string;
   topic: string;
-  mode: 'notes' | 'quiz' | 'homework' | 'flashcards' | 'lazy' | 'podcast';
+  mode: 'notes' | 'quiz' | 'homework' | 'flashcards' | 'lazy' | 'podcast' | 'cheat-sheet';
   language: Language;
   // Notes specific
   difficulty?: Difficulty;
@@ -138,6 +139,13 @@ export interface PodcastData {
   timestamp: number;
 }
 
+export interface CheatSheetData {
+  title: string;
+  topic: string;
+  content: string;
+  timestamp: number;
+}
+
 export interface QuizResult {
   id: string;
   topic: string;
@@ -149,10 +157,10 @@ export interface QuizResult {
 
 export interface HistoryItem {
   id: string;
-  type: 'note' | 'quiz' | 'homework' | 'flashcards' | 'lazy' | 'podcast';
+  type: 'note' | 'quiz' | 'homework' | 'flashcards' | 'lazy' | 'podcast' | 'cheat-sheet';
   title: string;
   timestamp: number;
-  data: StudyNoteData | QuizData | HomeworkData | FlashcardSet | PodcastData;
+  data: StudyNoteData | QuizData | HomeworkData | FlashcardSet | PodcastData | CheatSheetData;
   tags?: string[];
 }
 
@@ -187,9 +195,10 @@ export interface LearningPathItem {
   id: string;
   topic: string;
   description: string;
-  type: 'note' | 'quiz' | 'flashcards';
+  type: 'notes' | 'quiz' | 'flashcards'; // Changed from 'note' to 'notes' to match GenerationRequest
+  difficulty: 'Easy' | 'Medium' | 'Hard'; // Added for granularity
   status: 'locked' | 'available' | 'completed';
-  reason: string; // Why AI suggested this (e.g., "Based on weakness in Algebra")
+  reason: string; 
 }
 
 export interface LearningPath {

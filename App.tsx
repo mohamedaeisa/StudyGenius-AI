@@ -10,6 +10,7 @@ import Dashboard from './components/Dashboard';
 import FlashcardReview from './components/FlashcardReview';
 import GamificationScreen from './components/GamificationScreen';
 import PodcastPlayer from './components/PodcastPlayer';
+import CheatSheetDisplay from './components/CheatSheetDisplay';
 import { Analytics } from '@vercel/analytics/react';
 import { 
   AppView, 
@@ -23,9 +24,10 @@ import {
   UserPreferences,
   Flashcard,
   FlashcardSet,
-  PodcastData
+  PodcastData,
+  CheatSheetData
 } from './types';
-import { generateStudyNotes, generateQuiz, checkHomework, generateFlashcards, generateLazyGuide, generatePodcast } from './services/geminiService';
+import { generateStudyNotes, generateQuiz, checkHomework, generateFlashcards, generateLazyGuide, generatePodcast, generateCheatSheet } from './services/geminiService';
 import { saveToHistory, getStoredLanguage, saveFlashcards } from './services/storageService';
 import { loginUser, getActiveUser, logoutUser, loginGuest } from './services/authService';
 import { awardXP, checkStreak, checkBadges } from './services/gamificationService';
@@ -43,6 +45,7 @@ const App: React.FC = () => {
   const [quizData, setQuizData] = useState<QuizData | null>(null);
   const [homeworkData, setHomeworkData] = useState<HomeworkData | null>(null);
   const [podcastData, setPodcastData] = useState<PodcastData | null>(null);
+  const [cheatSheetData, setCheatSheetData] = useState<CheatSheetData | null>(null);
   const [currentLanguage, setCurrentLanguage] = useState<Language>(Language.ENGLISH);
   
   // Flashcards Review State
@@ -97,6 +100,7 @@ const App: React.FC = () => {
     setQuizData(null);
     setHomeworkData(null);
     setPodcastData(null);
+    setCheatSheetData(null);
   };
 
   const handleGeneration = async (request: GenerationRequest) => {
@@ -184,6 +188,19 @@ const App: React.FC = () => {
         
         handleGamificationUpdate(currentUser, XP_REWARDS.LISTEN_PODCAST);
         setCurrentView(AppView.PODCAST);
+      } else if (request.mode === 'cheat-sheet') {
+        const data = await generateCheatSheet(request);
+        setCheatSheetData(data);
+        saveToHistory({
+          id: Date.now().toString(),
+          type: 'cheat-sheet',
+          title: `Sheet: ${data.topic}`,
+          timestamp: Date.now(),
+          data: data
+        }, currentUser.id);
+        
+        handleGamificationUpdate(currentUser, XP_REWARDS.GENERATE_CHEAT_SHEET);
+        setCurrentView(AppView.CHEAT_SHEET);
       }
     } catch (error: any) {
       console.error("Generation failed", error);
@@ -235,6 +252,9 @@ const App: React.FC = () => {
     } else if (item.type === 'podcast') {
       setPodcastData(item.data as PodcastData);
       setCurrentView(AppView.PODCAST);
+    } else if (item.type === 'cheat-sheet') {
+      setCheatSheetData(item.data as CheatSheetData);
+      setCurrentView(AppView.CHEAT_SHEET);
     }
   };
 
@@ -309,6 +329,14 @@ const App: React.FC = () => {
         return podcastData ? (
           <PodcastPlayer 
             data={podcastData} 
+            onBack={() => setCurrentView(AppView.HOME)} 
+            appLanguage={appLanguage}
+          />
+        ) : null;
+      case AppView.CHEAT_SHEET:
+        return cheatSheetData ? (
+          <CheatSheetDisplay 
+            data={cheatSheetData} 
             onBack={() => setCurrentView(AppView.HOME)} 
             appLanguage={appLanguage}
           />

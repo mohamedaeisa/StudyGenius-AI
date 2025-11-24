@@ -108,6 +108,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onSubmit, isLoading, loadingSta
       case 'flashcards': return t.btnGenerateFlashcards;
       case 'lazy': return t.btnLazy;
       case 'podcast': return t.btnPodcast;
+      case 'cheat-sheet': return t.btnGenerateCheatSheet;
       default: return t.btnGenerateGuide;
     }
   };
@@ -120,6 +121,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onSubmit, isLoading, loadingSta
       case 'flashcards': return t.modeFlashcards;
       case 'lazy': return t.modeLazy;
       case 'podcast': return t.modePodcast;
+      case 'cheat-sheet': return t.modeCheatSheet;
       default: return m;
     }
   };
@@ -223,26 +225,50 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onSubmit, isLoading, loadingSta
           <div className="space-y-4 bg-slate-50 dark:bg-slate-700/30 p-4 rounded-lg">
             {/* Mode Selection Cards */}
             <div className="grid grid-cols-2 gap-3">
-              {['notes', 'quiz', 'homework', 'flashcards', 'lazy', 'podcast'].map((m) => {
+              {['notes', 'quiz', 'homework', 'flashcards', 'lazy', 'podcast', 'cheat-sheet'].map((m) => {
                 const isLazy = m === 'lazy';
                 const isPodcast = m === 'podcast';
+                const isCheatSheet = m === 'cheat-sheet';
+                
+                let borderClass = 'border-slate-200 dark:border-slate-700';
+                let textClass = 'text-slate-500 dark:text-slate-400';
+                let hoverClass = 'hover:border-brand-300 dark:hover:border-brand-700';
+                let bgClass = 'bg-white dark:bg-slate-800';
+
+                if (formData.mode === m) {
+                   if (isLazy) {
+                     borderClass = 'border-red-500';
+                     bgClass = 'bg-red-50 dark:bg-red-900/20';
+                     textClass = 'text-red-600 dark:text-red-300';
+                   } else if (isPodcast) {
+                     borderClass = 'border-purple-500';
+                     bgClass = 'bg-purple-50 dark:bg-purple-900/20';
+                     textClass = 'text-purple-600 dark:text-purple-300';
+                   } else if (isCheatSheet) {
+                     borderClass = 'border-teal-500';
+                     bgClass = 'bg-teal-50 dark:bg-teal-900/20';
+                     textClass = 'text-teal-600 dark:text-teal-300';
+                   } else {
+                     borderClass = 'border-brand-500';
+                     bgClass = 'bg-brand-50 dark:bg-brand-900/20';
+                     textClass = 'text-brand-600 dark:text-brand-300';
+                   }
+                } else {
+                   if (isLazy) hoverClass = 'hover:border-red-300 dark:hover:border-red-700';
+                   if (isPodcast) hoverClass = 'hover:border-purple-300 dark:hover:border-purple-700';
+                   if (isCheatSheet) hoverClass = 'hover:border-teal-300 dark:hover:border-teal-700';
+                }
+
                 return (
                   <button 
                     key={m}
                     type="button"
-                    className={`py-3 px-2 rounded-xl text-xs sm:text-sm font-bold transition-all border-2 ${
-                      formData.mode === m 
-                        ? isLazy 
-                          ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 shadow-sm'
-                          : isPodcast
-                            ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-300 shadow-sm'
-                            : 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-300 shadow-sm' 
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-brand-300 dark:hover:border-brand-700'
-                    } ${isLazy && formData.mode !== m ? 'hover:border-red-300 dark:hover:border-red-700' : ''} ${isPodcast && formData.mode !== m ? 'hover:border-purple-300 dark:hover:border-purple-700' : ''}`}
+                    className={`py-3 px-2 rounded-xl text-xs sm:text-sm font-bold transition-all border-2 shadow-sm ${borderClass} ${bgClass} ${textClass} ${formData.mode !== m ? hoverClass : ''}`}
                     onClick={() => handleChange('mode', m)}
                   >
                     {isLazy && <span className="mr-1">📺</span>}
                     {isPodcast && <span className="mr-1">🎙️</span>}
+                    {isCheatSheet && <span className="mr-1">📝</span>}
                     {getModeLabel(m)}
                   </button>
                 );
@@ -261,6 +287,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onSubmit, isLoading, loadingSta
               </select>
             </div>
 
+            {/* ... (existing logic for notes, quiz, homework) ... */}
             {formData.mode === 'notes' && (
               <div className="animate-fade-in space-y-4">
                  <div>
@@ -433,6 +460,17 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onSubmit, isLoading, loadingSta
                  </div>
                </div>
             )}
+
+            {formData.mode === 'cheat-sheet' && (
+               <div className="animate-fade-in p-4 bg-teal-50 dark:bg-teal-900/20 rounded-xl border border-teal-100 dark:border-teal-900/30">
+                 <p className="text-sm text-teal-800 dark:text-teal-200 font-medium mb-2 flex items-center gap-2">
+                   <span className="text-xl">📝</span> {t.modeCheatSheet}
+                 </p>
+                 <p className="text-xs text-slate-600 dark:text-slate-400 mb-0">
+                   {t.cheatSheetIntro}
+                 </p>
+               </div>
+            )}
           </div>
         </div>
 
@@ -442,7 +480,8 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onSubmit, isLoading, loadingSta
             isLoading={isLoading} 
             className={`w-full md:w-auto text-lg px-8 relative overflow-hidden ${
               formData.mode === 'lazy' ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500' : 
-              formData.mode === 'podcast' ? 'bg-purple-600 hover:bg-purple-700 focus:ring-purple-500' : ''
+              formData.mode === 'podcast' ? 'bg-purple-600 hover:bg-purple-700 focus:ring-purple-500' :
+              formData.mode === 'cheat-sheet' ? 'bg-teal-600 hover:bg-teal-700 focus:ring-teal-500' : ''
             }`}
             disabled={formData.mode === 'homework' && !formData.homeworkImage}
           >

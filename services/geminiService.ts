@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Schema, Modality } from "@google/genai";
-import { GenerationRequest, StudyNoteData, QuizData, HomeworkData, Language, Difficulty, DetailLevel, UserProfile, HistoryItem, QuizResult, AnalysisResult, Flashcard, FlashcardSet, LearningPath, PodcastData } from '../types';
+import { GenerationRequest, StudyNoteData, QuizData, HomeworkData, Language, Difficulty, DetailLevel, UserProfile, HistoryItem, QuizResult, AnalysisResult, Flashcard, FlashcardSet, LearningPath, PodcastData, CheatSheetData } from '../types';
 
 // Helper to get API Key safely in different environments
 const getApiKey = (): string => {
@@ -94,10 +94,17 @@ export const generateStudyNotes = async (req: GenerationRequest): Promise<StudyN
   const mermaidMatch = text.match(/```mermaid([\s\S]*?)```/);
   const mermaidCode = mermaidMatch ? mermaidMatch[1].trim() : undefined;
 
-  // Clean Markdown (remove JSON block if it appears at start)
+  // Clean Markdown
   let markdownContent = text;
+  
+  // 1. Remove JSON metadata block
   if (jsonMatch) {
-    markdownContent = text.replace(jsonMatch[0], '').trim();
+    markdownContent = markdownContent.replace(jsonMatch[0], '').trim();
+  }
+  
+  // 2. Remove Mermaid block to prevent raw text display
+  if (mermaidMatch) {
+    markdownContent = markdownContent.replace(mermaidMatch[0], '').trim();
   }
 
   return {
@@ -441,22 +448,42 @@ export const generateFlashcards = async (req: GenerationRequest): Promise<Flashc
 export const generateLearningPath = async (
   user: UserProfile,
   weaknesses: string[],
-  subject: string
+  subject: string,
+  customGoal?: string // New Optional Parameter
 ): Promise<LearningPath> => {
   validateAi();
 
+  let contextInstruction = "";
+  
+  if (customGoal && customGoal.trim().length > 0) {
+    contextInstruction = `
+      USER CUSTOM GOAL: "${customGoal}".
+      Ignore standard curriculum flow if it conflicts with this goal. 
+      Create a path specifically designed to achieve this goal efficiently.
+      Subject: Derived from goal or default to ${subject}.
+    `;
+  } else {
+    contextInstruction = `
+      Identified Weaknesses: ${weaknesses.join(', ') || 'General improvement needed'}.
+      Prioritize topics that address these specific weaknesses first.
+      Subject: ${subject}.
+    `;
+  }
+
   const prompt = `
-    Create an adaptive learning path for a student.
+    Create a granular, adaptive learning path for a student.
     Profile: ${user.preferences.defaultYear}, ${user.preferences.defaultCurriculum}.
-    Subject: ${subject}
-    Identified Weaknesses: ${weaknesses.join(', ') || 'General improvement needed'}
     Language: ${user.preferences.defaultLanguage}
 
-    Generate a sequence of 5 distinct learning milestones/steps.
-    If weaknesses exist, prioritize topics addressing them.
-    If no weaknesses, suggest a standard logical progression for the grade level.
+    ${contextInstruction}
 
-    For each item, choose the best type: 'note' (to learn), 'quiz' (to test), or 'flashcards' (to memorize).
+    Generate a sequence of 5 learning milestones.
+    Order them logically: Start with foundational concepts (Easy), then move to application (Medium), and finally advanced synthesis (Hard).
+    
+    For each item:
+    1. 'type' MUST be exactly one of: "notes", "quiz", "flashcards". (Use "notes" to learn, "flashcards" to memorize, "quiz" to test).
+    2. 'difficulty' MUST be one of: "Easy", "Medium", "Hard".
+    3. 'description': Brief reason for this step.
 
     Output JSON:
     {
@@ -464,8 +491,9 @@ export const generateLearningPath = async (
       "items": [
         {
           "topic": "Specific Topic Name",
-          "description": "Short reasoning why this is next.",
-          "type": "note" | "quiz" | "flashcards"
+          "description": "Short reasoning.",
+          "type": "notes" | "quiz" | "flashcards",
+          "difficulty": "Easy" | "Medium" | "Hard"
         }
       ]
     }
@@ -482,9 +510,10 @@ export const generateLearningPath = async (
           properties: {
             topic: { type: Type.STRING },
             description: { type: Type.STRING },
-            type: { type: Type.STRING, enum: ['note', 'quiz', 'flashcards'] }
+            type: { type: Type.STRING, enum: ['notes', 'quiz', 'flashcards'] },
+            difficulty: { type: Type.STRING, enum: ['Easy', 'Medium', 'Hard'] }
           },
-          required: ['topic', 'description', 'type']
+          required: ['topic', 'description', 'type', 'difficulty']
         }
       }
     },
@@ -520,28 +549,36 @@ export const generateLazyGuide = async (req: GenerationRequest): Promise<StudyNo
   validateAi();
 
   // If user provided a URL, we try to use it. If they provided transcript, we use that.
-  const contentSource = req.transcriptText 
+  const hasTranscript = req.transcriptText && req.transcriptText.trim().length > 0;
+  const contentSource = hasTranscript
     ? `TRANSCRIPT: ${req.transcriptText}` 
     : `YOUTUBE URL: ${req.youtubeUrl}`;
 
   const prompt = `
-    You are the "Lazy Student" helper. 
-    Analyze the following video content (either provided as a URL or transcript):
+    You are the "Lazy Student" AI assistant.
+    
+    SOURCE DATA:
     ${contentSource}
 
-    Goal: Create a comprehensive study guide + quick quiz so I don't have to watch the whole video.
+    TASK:
+    Create a comprehensive study guide and quiz based *strictly* on the source provided.
 
-    Structure the response exactly as follows:
-    1. A JSON block at the VERY START identifying the "title" and a short "summary" (max 200 chars).
-    2. A markdown section containing:
+    CRITICAL RULES FOR URLS:
+    1. If NO transcript is provided and you only have a URL, you MUST use the Google Search tool to find the video's title, description, and content summary.
+    2. If you cannot find specific information about *this specific video* (e.g., if search returns nothing relevant), do NOT hallucinate or generate generic content based on words in the URL.
+    3. Instead, if content is inaccessible, return a title of "Content Unavailable" and a summary of "Unable to verify video content. Please paste the transcript for accuracy." in the JSON block.
+
+    OUTPUT FORMAT:
+    1. A JSON block at the VERY START: { "title": "...", "summary": "..." }
+    2. A Markdown section containing:
        - H1 Title
        - ## 📺 Video Summary (Concise overview)
-       - ## 🔑 Key Concepts (Bulleted list of main takeaways)
-       - ## 🧠 Detailed Notes (Expand on difficult parts)
-       - ## 📝 Self-Check Quiz (5 Multiple Choice Questions with answers hidden in a details/summary block or at the very end).
-    3. The markdown MUST include a Mermaid.js diagram definition inside a \`\`\`mermaid block representing the video's logic or flow.
-       - Use "graph TD"
-       - Wrap node text in quotes.
+       - ## 🔑 Key Concepts (Bulleted list)
+       - ## 🧠 Detailed Notes
+       - ## 📝 Self-Check Quiz (5 Multiple Choice Questions)
+    3. A Mermaid.js diagram inside \`\`\`mermaid block.
+       - Start with "graph TD"
+       - CRITICAL: Wrap ALL node text in double quotes. e.g. A["Text"] --> B["Other Text"]
 
     Language: ${req.language}
     Level: ${req.year}
@@ -576,8 +613,15 @@ export const generateLazyGuide = async (req: GenerationRequest): Promise<StudyNo
   const mermaidCode = mermaidMatch ? mermaidMatch[1].trim() : undefined;
 
   let markdownContent = text;
+  
+  // 1. Remove JSON metadata
   if (jsonMatch) {
-    markdownContent = text.replace(jsonMatch[0], '').trim();
+    markdownContent = markdownContent.replace(jsonMatch[0], '').trim();
+  }
+  
+  // 2. Remove Mermaid code block
+  if (mermaidMatch) {
+    markdownContent = markdownContent.replace(mermaidMatch[0], '').trim();
   }
 
   return {
@@ -659,6 +703,49 @@ export const generatePodcast = async (req: GenerationRequest, onProgress?: (msg:
     topic: req.topic,
     script: scriptText,
     audioBase64: audioBase64,
+    timestamp: Date.now()
+  };
+};
+
+export const generateCheatSheet = async (req: GenerationRequest): Promise<CheatSheetData> => {
+  validateAi();
+  const model = 'gemini-2.5-flash';
+
+  const prompt = `
+    You are an expert tutor creating a high-density "Cheat Sheet" for a student.
+    Subject: ${req.subject}
+    Topic: ${req.topic}
+    Level: ${req.year}
+    Language: ${req.language}
+
+    Goal: Create a comprehensive, single-page reference guide (Markdown).
+    
+    Structure:
+    1. **Key Definitions**: Bullets of must-know terms.
+    2. **Core Formulas/Rules**: If applicable (Math/Science) show formulas. If History/Lit, show Dates/Themes.
+    3. **Important Steps**: Process breakdowns (e.g. "How to solve X").
+    4. **Common Pitfalls**: "Don't do this" or "Watch out for".
+    5. **Quick Examples**: 1-2 tiny examples.
+
+    Formatting Rules:
+    - Use concise language. No fluff.
+    - Use Bold (**text**) for terms.
+    - Use Tables for comparisons if useful.
+    - Use Code blocks for formulas if needed.
+    - Keep it visually organized for quick scanning.
+  `;
+
+  const response = await ai!.models.generateContent({
+    model: model,
+    contents: prompt
+  });
+
+  const text = response.text || "Generation failed";
+
+  return {
+    title: `Cheat Sheet: ${req.topic}`,
+    topic: req.topic,
+    content: text,
     timestamp: Date.now()
   };
 };
