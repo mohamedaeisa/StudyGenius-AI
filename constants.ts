@@ -18,7 +18,8 @@ export const EDUCATION_SYSTEMS: EducationSystem[] = [
   EducationSystem.IGCSE,
   EducationSystem.IB,
   EducationSystem.THANAWEYA_AMMA,
-  EducationSystem.CAMBRIDGE
+  EducationSystem.CAMBRIDGE,
+  EducationSystem.AMERICAN
 ];
 
 // --- Gamification Constants ---

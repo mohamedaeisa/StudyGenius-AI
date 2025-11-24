@@ -16,7 +16,8 @@ export enum EducationSystem {
   IGCSE = 'IGCSE',
   IB = 'IB',
   THANAWEYA_AMMA = 'Thanaweya Amma',
-  CAMBRIDGE = 'Cambridge'
+  CAMBRIDGE = 'NEIS (Cambridge)',
+  AMERICAN = 'American Diploma (eST)'
 }
 
 export enum Language {
