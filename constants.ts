@@ -84,6 +84,7 @@ export const TRANSLATIONS = {
     menuCreate: "Create",
     menuDashboard: "Study Tracker",
     menuGamification: "Achievements",
+    menuViva: "Online Teacher",
     welcomeTitle: "Create Your Study Material",
     welcomeSubtitle: "Configure the AI to generate notes, quizzes, or check your homework.",
     eduLevel: "Education Level",
@@ -101,6 +102,7 @@ export const TRANSLATIONS = {
     modeLazy: "YouTube / Lazy",
     modePodcast: "AI Podcast",
     modeCheatSheet: "Cheat Sheet",
+    modeViva: "Online Teacher",
     language: "Language",
     detailLevel: "Detail Level",
     difficulty: "Difficulty",
@@ -205,7 +207,7 @@ export const TRANSLATIONS = {
     pathModeCustom: "Custom Goal",
     pathCustomPlaceholder: "e.g. Prepare for Algebra Finals, Learn about Space...",
     
-    // Lazy/YouTube & Podcast
+    // Lazy/YouTube & Podcast & Viva
     youtubeUrl: "YouTube Video URL",
     youtubePlaceholder: "https://www.youtube.com/watch?v=...",
     transcriptLabel: "Or Paste Transcript (Optional - for better accuracy)",
@@ -222,6 +224,15 @@ export const TRANSLATIONS = {
     male: "Male",
     female: "Female",
     downloadAudio: "Download Audio",
+    vivaTitle: "Conversational Viva",
+    vivaIntro: "Speak with the AI tutor in real-time. Test your knowledge verbally.",
+    vivaStart: "Start Session",
+    vivaEnd: "End Session",
+    vivaListening: "Listening...",
+    vivaSpeaking: "Speaking...",
+    vivaStatus: "Status",
+    vivaConnect: "Connect",
+    vivaDisconnect: "Disconnect",
     
     // Common
     back: "Back",
@@ -268,6 +279,7 @@ export const TRANSLATIONS = {
     menuCreate: "إنشاء",
     menuDashboard: "سجل الدراسة",
     menuGamification: "الإنجازات",
+    menuViva: "المعلم الذكي",
     welcomeTitle: "أنشئ موادك الدراسية",
     welcomeSubtitle: "قم بإعداد الذكاء الاصطناعي لإنشاء ملاحظات، اختبارات، أو تصحيح واجبك.",
     eduLevel: "المستوى التعليمي",
@@ -285,6 +297,7 @@ export const TRANSLATIONS = {
     modeLazy: "يوتيوب / السريع",
     modePodcast: "بودكاست ذكي",
     modeCheatSheet: "ورقة المراجعة",
+    modeViva: "المعلم الذكي",
     language: "اللغة",
     detailLevel: "مستوى التفصيل",
     difficulty: "الصعوبة",
@@ -389,7 +402,7 @@ export const TRANSLATIONS = {
     pathModeCustom: "هدف مخصص",
     pathCustomPlaceholder: "مثال: التحضير لاختبار الجبر، تعلم الفضاء...",
 
-    // Lazy/YouTube & Podcast
+    // Lazy/YouTube & Podcast & Viva
     youtubeUrl: "رابط فيديو يوتيوب",
     youtubePlaceholder: "https://www.youtube.com/watch?v=...",
     transcriptLabel: "أو الصق النص (اختياري - لدقة أفضل)",
@@ -406,6 +419,15 @@ export const TRANSLATIONS = {
     male: "رجل",
     female: "امرأة",
     downloadAudio: "تحميل الصوت",
+    vivaTitle: "المحادثة الصوتية",
+    vivaIntro: "تحدث مع المعلم الذكي مباشرة. اختبر معلوماتك شفهياً.",
+    vivaStart: "ابدأ الجلسة",
+    vivaEnd: "إنهاء الجلسة",
+    vivaListening: "استماع...",
+    vivaSpeaking: "تحدث...",
+    vivaStatus: "الحالة",
+    vivaConnect: "اتصال",
+    vivaDisconnect: "قطع الاتصال",
     
     // Common
     back: "رجوع",

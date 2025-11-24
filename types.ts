@@ -9,7 +9,8 @@ export enum AppView {
   FLASHCARDS = 'FLASHCARDS',
   GAMIFICATION = 'GAMIFICATION',
   PODCAST = 'PODCAST',
-  CHEAT_SHEET = 'CHEAT_SHEET'
+  CHEAT_SHEET = 'CHEAT_SHEET',
+  VIVA = 'VIVA'
 }
 
 export enum EducationSystem {
@@ -169,6 +170,7 @@ export interface AnalysisResult {
   summary: string;
   strengths: string[];
   weaknesses: string[];
+  mistakePatterns?: string[];
   recommendations: string[];
   masteryLevel: number;
   timestamp: number;

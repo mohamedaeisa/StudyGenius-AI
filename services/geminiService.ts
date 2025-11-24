@@ -545,8 +545,10 @@ export const generateLearningPath = async (
   };
 };
 
-export const generateLazyGuide = async (req: GenerationRequest): Promise<StudyNoteData> => {
+export const generateLazyGuide = async (req: GenerationRequest, onProgress?: (msg: string) => void): Promise<StudyNoteData> => {
   validateAi();
+
+  if (onProgress) onProgress("Analyzing content & generating guide...");
 
   // If user provided a URL, we try to use it. If they provided transcript, we use that.
   const hasTranscript = req.transcriptText && req.transcriptText.trim().length > 0;

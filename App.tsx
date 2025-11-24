@@ -11,6 +11,7 @@ import FlashcardReview from './components/FlashcardReview';
 import GamificationScreen from './components/GamificationScreen';
 import PodcastPlayer from './components/PodcastPlayer';
 import CheatSheetDisplay from './components/CheatSheetDisplay';
+import VivaMode from './components/VivaMode';
 import { Analytics } from '@vercel/analytics/react';
 import { 
   AppView, 
@@ -162,7 +163,8 @@ const App: React.FC = () => {
         setReviewCards(data.cards);
         setCurrentView(AppView.FLASHCARDS);
       } else if (request.mode === 'lazy') {
-        const data = await generateLazyGuide(request);
+        // Pass callback for progress updates
+        const data = await generateLazyGuide(request, (status) => setLoadingStatus(status));
         setNoteData(data);
         saveToHistory({
           id: Date.now().toString(),
@@ -287,6 +289,7 @@ const App: React.FC = () => {
             appLanguage={appLanguage}
             user={currentUser}
             prefill={configPrefill}
+            onNavigate={setCurrentView}
           />
         ) : null;
       case AppView.NOTES:
@@ -354,6 +357,13 @@ const App: React.FC = () => {
       case AppView.GAMIFICATION:
         return currentUser ? (
           <GamificationScreen 
+            user={currentUser}
+            appLanguage={appLanguage}
+          />
+        ) : null;
+      case AppView.VIVA:
+        return currentUser ? (
+          <VivaMode 
             user={currentUser}
             appLanguage={appLanguage}
           />
